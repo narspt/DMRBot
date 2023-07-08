@@ -23,6 +23,8 @@ import json
 import time
 from gtts import gTTS
 
+#requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+
 def main():
     openaiurl = "https://api.openai.com/v1"
     
@@ -30,19 +32,19 @@ def main():
     #    print(sys.argv[1])
     
     try:
-        with open('openai_api_key.txt', 'r') as file:
+        with open("openai_api_key.txt", "r") as file:
             openai_api_key = file.read().strip()
     except:
         print("failed to read file openai_api_key.txt")
         exit(1)
     
-    headers = { "Authorization" : f"Bearer {openai_api_key}" }
+    headers = { "Authorization" : "Bearer " + openai_api_key }
 
 
     ########## Speech-to-Text ##########
 
     print("* Query Whisper API to get Speech-to-Text")
-    url = f"{openaiurl}/audio/transcriptions"
+    url = openaiurl + "/audio/transcriptions"
     audio_file_path = "rx.wav"
 
     data = {
@@ -57,9 +59,20 @@ def main():
     # uncomment the following line to force Speech-to-Text on specific language
     #data["language"] = "pt"
     
-    response = requests.post(url, files=files, data=data, headers=headers)
-    print("Status Code:", response.status_code)
-    if response.status_code != 200:
+    for i in range(2):
+        if i > 0:
+            time.sleep(2)
+            print("retrying...")
+        try:
+            response = requests.post(url, files=files, data=data, headers=headers, timeout=60)
+            print("Status Code:", response.status_code)
+            if response.status_code == 200:
+                break
+        except requests.exceptions.Timeout:
+            print("connection timeout")
+        except requests.exceptions.RequestException:
+            print("connection error")
+    else:
         exit(1)
     
     speech_to_text = response.json()["text"]
@@ -71,7 +84,7 @@ def main():
     ########## Query ChatGPT ##########
 
     print("* Query ChatGPT model with the text")
-    url = f"{openaiurl}/chat/completions"
+    url = openaiurl + "/chat/completions"
 
     data = {
         "model": "gpt-3.5-turbo",
@@ -90,15 +103,26 @@ def main():
     speech_to_text += " (reply in " + speech_language + ")"
     
     data["messages"].append({"role": "user", "content": speech_to_text})
-
-    response = requests.post(url, json=data, headers=headers)
-    print("Status Code:", response.status_code)
-    if response.status_code != 200:
+    
+    for i in range(2):
+        if i > 0:
+            time.sleep(2)
+            print("retrying...")
+        try:
+            response = requests.post(url, json=data, headers=headers, timeout=60)
+            print("Status Code:", response.status_code)
+            if response.status_code == 200:
+                break
+        except requests.exceptions.Timeout:
+            print("connection timeout")
+        except requests.exceptions.RequestException:
+            print("connection error")
+    else:
         exit(1)
     
     chatgpt_response = response.json()["choices"][0]["message"]["content"]
     print("Response from ChatGPT:", chatgpt_response)
-    print("Total Tokens:", response.json()['usage']['total_tokens'])
+    print("Total Tokens:", response.json()["usage"]["total_tokens"])
     
     data["messages"].append({"role": "assistant", "content": chatgpt_response})
     if data["messages"][0]["role"] == "system":
@@ -184,21 +208,26 @@ def main():
         tts_tld = lang_tld[tts_lang]
     else:
         tts_tld = "com"
-
-    print(f"lang={tts_lang}, tld={tts_tld}")
+    
+    print("lang=" + tts_lang + ", tld=" + tts_tld)
     tts = gTTS(chatgpt_response, lang=tts_lang, tld=tts_tld, slow=False)
     
-    try:
-        tts.save('tx.mp3')
-    except:
-        print("failed to convert text-to-speech")
+    for i in range(2):
+        if i > 0:
+            time.sleep(2)
+            print("retrying...")
+        try:
+            tts.save("tx.mp3")
+            print("done")
+            break
+        except:
+            print("failed to convert text-to-speech")
+    else:
         exit(1)
     
     if os.system("ffmpeg -y -loglevel error -i tx.mp3 -ar 8000 tx.wav") != 0:
         print("failed to call ffmpeg")
         exit(1)
 
-    print("done")
-    
 if __name__ == "__main__":
     main()

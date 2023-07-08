@@ -975,7 +975,8 @@ int main(int argc, char **argv)
 	int tx_ambefcnt = 0;
 	uint8_t tx_ambefr[3][9];
 	int64_t trgus = 0;
-	int rx_srcid;
+	int rx_srcid = 0;
+	bool txpending = false;
 	
 	if(argc != 5){
 		fprintf(stderr, "Usage: dmrbot [CALLSIGN] [DMRID] [DMRHost1IP:PORT:TG:PW] [AMBEServerIP:PORT]\n");
@@ -1174,9 +1175,9 @@ int main(int argc, char **argv)
             static const uint8_t ambe_ratep[] = {0x61,0x00,0x0D,0x00,0x0A,0x04,0x31,0x07,0x54,0x24,0x00,0x00,0x00,0x00,0x00,0x6F,0x48};
             sendto(udp2, ambe_ratep, sizeof(ambe_ratep), 0, (const struct sockaddr *)&host2, sizeof(host2));
             
-            printf("*** RX START ***\n");
+            printf("*** RX START (srcid: %d) ***\n", rx_srcid);
             rx_ambefcnt = 0;
-            rx_endt = 0;
+            rx_endt = time(NULL)+2; //allow rx end without terminator, after extra timeout
           }
           else if ((buf[15] & 0x0F) == MMDVM_SLOTTYPE_TERMINATOR) {
             rx_streamid = -1;
@@ -1302,11 +1303,15 @@ int main(int argc, char **argv)
           fwrite(&rx_wavheader, 1, sizeof(rx_wavheader), rx_wavefile);
           fclose(rx_wavefile);
           rx_wavefile = NULL;
-          printf("*** RX END ***\n");
+          printf("*** RX END (ambeframes: %d) ***\n", rx_ambefcnt);
           rx_streamid = -1;
-
-          if (rx_ambefcnt < 1) {
-            rx_endt = 0; //stop if we got no audio frames
+          
+          if (txpending) { //if there is a pending tx, ignore current rx
+            rx_endt = time(NULL)+1; //wait a bit more before starting the pending tx
+            continue;
+          }
+          if (rx_ambefcnt < 50) { //if we got less than 1 sec. of audio
+            rx_endt = 0; //cancel processing this short rx
             continue;
           }
           if (tx_wavefile != NULL) {
@@ -1316,17 +1321,21 @@ int main(int argc, char **argv)
           char cmdstr[50];
           sprintf(cmdstr, "python3 dmrbot.py %d", rx_srcid);
           if (system(cmdstr) != 0) {
-            rx_endt = 0; //cancel tx if script fails
-            continue;
+            //rx_endt = 0; //cancel tx if script fails
+            //continue;
+            fprintf(stderr, "dmrbot.py returned error, tx unavailable.wav file...\n");
+            system("cat unavailable.wav > tx.wav");
           }
           pong_time1 = time(NULL); //prevent timeout due to time spent on system() call
           rx_endt = time(NULL)+1; //wait a bit more before starting tx, allow rx to check if someone else tx
+          txpending = true;
           continue;
         }
           
         //tx playback
-        if (tx_wavefile == NULL) {
+        if ( txpending && (tx_wavefile == NULL) ) {
           printf("*** TX START ***\n");
+          txpending = false;
           tx_ambefcnt = 0;
           trgus = 0;
           tx_streamid = (rand() % 0xffffffff) + 1;
@@ -1340,6 +1349,8 @@ int main(int argc, char **argv)
           wav_header tx_wavheader;
           if ( fread(&tx_wavheader, 1, sizeof(tx_wavheader), tx_wavefile) != sizeof(tx_wavheader) ) {
             fprintf(stderr, "invalid wav file\n");
+            fclose(tx_wavefile);
+            tx_wavefile = NULL;
             rx_endt = 0; //cancel tx
             continue;
           }
@@ -1347,11 +1358,15 @@ int main(int argc, char **argv)
             || (memcmp(tx_wavheader.wave_header, "WAVE", 4U) != 0)
             || (memcmp(tx_wavheader.fmt_header,  "fmt ", 4U) != 0) ) {
             fprintf(stderr, "invalid wav file\n");
+            fclose(tx_wavefile);
+            tx_wavefile = NULL;
             rx_endt = 0; //cancel tx
             continue;
           }
           if ( (tx_wavheader.sample_rate != 8000) || (tx_wavheader.bit_depth != 16) || (tx_wavheader.num_channels != 1) ) {
             fprintf(stderr, "wav file must be 8000Hz 16-bit mono\n");
+            fclose(tx_wavefile);
+            tx_wavefile = NULL;
             rx_endt = 0; //cancel tx
             continue;
           }
@@ -1390,54 +1405,56 @@ int main(int argc, char **argv)
           sendto(udp2, ambe_ratep, sizeof(ambe_ratep), 0, (const struct sockaddr *)&host2, sizeof(host2));
         }
         
-        //ensure the code below only runs once every 20ms
-        struct timespec nanos;
-        clock_gettime(CLOCK_MONOTONIC, &nanos);
-        int64_t nowus = (int64_t)nanos.tv_sec * 1000000 + nanos.tv_nsec / 1000;
-        if (abs(trgus - nowus) > 1000000)
-          trgus = nowus;
-        if (nowus < trgus)
-          continue;
-        trgus += 20000;
-        //printf("%lld\n", nowus/1000);
-        
-        uint8_t ambebuf[4+2+320] = {0x61, 0x01, 0x42, 0x02,  0x00, 160};
-        if ( fread(&ambebuf[6], 1, 320, tx_wavefile) == 320 ) {
-          for (int i=0; i < 160; i++) //swap byte order for all samples, AMBE3000 uses MSB first
-            ((unsigned short *)(&ambebuf[6]))[i] = (((unsigned short *)(&ambebuf[6]))[i] >> 8) | (((unsigned short *)(&ambebuf[6]))[i] << 8);
-          sendto(udp2, ambebuf, sizeof(ambebuf), 0, (const struct sockaddr *)&host2, sizeof(host2));
-        } else {
-          fclose(tx_wavefile);
-          tx_wavefile = NULL;
-          rx_endt = 0;
-          printf("*** TX END ***\n");
+        if (tx_wavefile != NULL) {
+          //ensure the code below only runs once every 20ms
+          struct timespec nanos;
+          clock_gettime(CLOCK_MONOTONIC, &nanos);
+          int64_t nowus = (int64_t)nanos.tv_sec * 1000000 + nanos.tv_nsec / 1000;
+          if (abs(trgus - nowus) > 1000000)
+            trgus = nowus;
+          if (nowus < trgus)
+            continue;
+          trgus += 20000;
+          //printf("%lld\n", nowus/1000);
+          
+          uint8_t ambebuf[4+2+320] = {0x61, 0x01, 0x42, 0x02,  0x00, 160};
+          if ( fread(&ambebuf[6], 1, 320, tx_wavefile) == 320 ) {
+            for (int i=0; i < 160; i++) //swap byte order for all samples, AMBE3000 uses MSB first
+              ((unsigned short *)(&ambebuf[6]))[i] = (((unsigned short *)(&ambebuf[6]))[i] >> 8) | (((unsigned short *)(&ambebuf[6]))[i] << 8);
+            sendto(udp2, ambebuf, sizeof(ambebuf), 0, (const struct sockaddr *)&host2, sizeof(host2));
+          } else {
+            fclose(tx_wavefile);
+            tx_wavefile = NULL;
+            rx_endt = 0;
+            printf("*** TX END ***\n");
 
-          //send terminator packet
-          memset(buf, 0, 55);
-          memcpy(buf, "DMRD", 4);
-          buf[4] = ((tx_ambefcnt / 3) + 1) % 256;
-          tx_srcid = ((dmrid>99999999)?dmrid/100:dmrid);
-          buf[5] = (tx_srcid >> 16) & 0xff;
-          buf[6] = (tx_srcid >> 8) & 0xff;
-          buf[7] = (tx_srcid >> 0) & 0xff;
-          tx_tgid = host1_tg;
-          buf[8] = (host1_tg >> 16) & 0xff;
-          buf[9] = (host1_tg >> 8) & 0xff;
-          buf[10] = (host1_tg >> 0) & 0xff;
-          buf[11] = (dmrid >> 24) & 0xff;
-          buf[12] = (dmrid >> 16) & 0xff;
-          buf[13] = (dmrid >> 8) & 0xff;
-          buf[14] = (dmrid >> 0) & 0xff;
-          buf[15] = 0x80 | (DMRMMDVM_FRAMETYPE_DATASYNC << 4) | MMDVM_SLOTTYPE_TERMINATOR;
-          *(uint32_t *)(&buf[16]) = tx_streamid;
-          generate_header();
-          sendto(udp1, buf, 55, 0, (const struct sockaddr *)&host1, sizeof(host1));
+            //send terminator packet
+            memset(buf, 0, 55);
+            memcpy(buf, "DMRD", 4);
+            buf[4] = ((tx_ambefcnt / 3) + 1) % 256;
+            tx_srcid = ((dmrid>99999999)?dmrid/100:dmrid);
+            buf[5] = (tx_srcid >> 16) & 0xff;
+            buf[6] = (tx_srcid >> 8) & 0xff;
+            buf[7] = (tx_srcid >> 0) & 0xff;
+            tx_tgid = host1_tg;
+            buf[8] = (host1_tg >> 16) & 0xff;
+            buf[9] = (host1_tg >> 8) & 0xff;
+            buf[10] = (host1_tg >> 0) & 0xff;
+            buf[11] = (dmrid >> 24) & 0xff;
+            buf[12] = (dmrid >> 16) & 0xff;
+            buf[13] = (dmrid >> 8) & 0xff;
+            buf[14] = (dmrid >> 0) & 0xff;
+            buf[15] = 0x80 | (DMRMMDVM_FRAMETYPE_DATASYNC << 4) | MMDVM_SLOTTYPE_TERMINATOR;
+            *(uint32_t *)(&buf[16]) = tx_streamid;
+            generate_header();
+            sendto(udp1, buf, 55, 0, (const struct sockaddr *)&host1, sizeof(host1));
 #ifdef DEBUG
-          fprintf(stderr, "SEND DMR: ");
-          for(int i = 0; i < 55; ++i)
-            fprintf(stderr, "%02x ", buf[i]);
-          fprintf(stderr, "\n");
+            fprintf(stderr, "SEND DMR: ");
+            for(int i = 0; i < 55; ++i)
+              fprintf(stderr, "%02x ", buf[i]);
+            fprintf(stderr, "\n");
 #endif
+          }
         }
         
     }
@@ -1446,5 +1463,5 @@ int main(int argc, char **argv)
       host1_connect_status = DISCONNECTED;
       fprintf(stderr, "DMR connection timed out, retrying connection...\n");
     }
-	}
+  }
 }

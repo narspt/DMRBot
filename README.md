@@ -10,10 +10,11 @@ OpenAI Whisper API is used for speech recognition and Google Translate's text-to
 4. Create a file named "openai_api_key.txt" with your API key on the DMRBot directory.
 
 # Requirements
-Python is required to run the dmrbot.py helper script, also gTTS python package must be installed:
+Python 3.4+ is required to run the dmrbot.py helper script, also gTTS python package must be installed:
 ```
-pip install gTTS
+pip3 install gTTS
 ```
+ffmpeg is also required.
 
 # Build
 Main program is a single C file, no makefile is required. To build, simply run gcc:
