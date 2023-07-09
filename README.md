@@ -24,7 +24,7 @@ gcc -o dmrbot dmrbot.c
 
 # Usage
 ```
-./dmrbot [CALLSIGN] [DMRID] [DMRHost1IP:PORT:TG:PW] [AMBEServerIP:PORT]
+./dmrbot [CALLSIGN] [DMRID] [DMRHostIP:PORT:TG:PW] [AMBEServerIP:PORT]
 ```
 
 # Notes

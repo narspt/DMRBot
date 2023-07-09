@@ -979,7 +979,7 @@ int main(int argc, char **argv)
 	bool txpending = false;
 	
 	if(argc != 5){
-		fprintf(stderr, "Usage: dmrbot [CALLSIGN] [DMRID] [DMRHost1IP:PORT:TG:PW] [AMBEServerIP:PORT]\n");
+		fprintf(stderr, "Usage: dmrbot [CALLSIGN] [DMRID] [DMRHostIP:PORT:TG:PW] [AMBEServerIP:PORT]\n");
 		return 0;
 	}
 	else{
