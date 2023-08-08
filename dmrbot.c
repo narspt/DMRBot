@@ -954,7 +954,7 @@ int main(int argc, char **argv)
 {
 	struct 	sockaddr_in rx;
 	struct 	hostent *hp;
-	struct  timeval tv;
+	struct 	timeval tv;
 	char *	host1_url;
 	char *	host2_url;
 	int 	host1_port;
@@ -978,6 +978,30 @@ int main(int argc, char **argv)
 	int rx_srcid = 0;
 	bool txpending = false;
 	
+	//change stdout/stderr to line buffering
+	setvbuf(stdout, NULL, _IOLBF, 0);
+	setvbuf(stderr, NULL, _IOLBF, 0);
+	
+	//change working directory to the executable directory
+	char exepath[4096] = {0};
+	if (readlink("/proc/self/exe", exepath, sizeof(exepath)-1) == -1) {
+		fprintf(stderr, "failed to get executable path\n");
+		return 1;
+	}
+	char *exelastslash = strrchr(exepath, '/');
+	if (exelastslash == NULL) {
+		fprintf(stderr, "failed to extract executable directory\n");
+		return 1;
+	}
+	*(exelastslash+1) = '\0';
+	if (chdir(exepath) == -1) {
+		fprintf(stderr, "failed to change working directory\n");
+		return 1;
+	}
+	
+	//seed random generator
+	srand(time(NULL));
+	
 	if(argc != 5){
 		fprintf(stderr, "Usage: dmrbot [CALLSIGN] [DMRID] [DMRHostIP:PORT:TG:PW] [AMBEServerIP:PORT]\n");
 		return 0;
@@ -998,30 +1022,6 @@ int main(int argc, char **argv)
 	
 	signal(SIGINT, process_signal); 						//Handle CTRL-C gracefully
 	signal(SIGALRM, process_signal); 						//Ping timer
-	
-  //change stdout/stderr to line buffering
-  setvbuf(stdout, NULL, _IOLBF, 0);
-  setvbuf(stderr, NULL, _IOLBF, 0);
-	
-  //change working directory to the executable directory
-  char exepath[256+1] = {0};
-  if (readlink("/proc/self/exe", exepath, sizeof(exepath)-1) == -1) {
-    fprintf(stderr, "failed to get executable path\n");
-    return 1;
-  }
-  char *exelastslash = strrchr(exepath, '/');
-  if (exelastslash == NULL) {
-    fprintf(stderr, "failed to extract executable directory\n");
-    return 1;
-  }
-  *(exelastslash+1) = '\0';
-  if (chdir(exepath) == -1) {
-    fprintf(stderr, "failed to change working directory\n");
-    return 1;
-  }
-	
-	//seed random generator
-	srand(time(NULL));
 	
 	if ((udp1 = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 		perror("cannot create socket");
@@ -1213,7 +1213,7 @@ int main(int argc, char **argv)
     }
 
     else if( rxlen && (udprx == udp2) && (rx.sin_addr.s_addr == host2.sin_addr.s_addr) ){ //from ambeserver
-      if (rxlen == 4+2+320) {
+      if ((rxlen == 4+2+320) && (buf[0] == 0x61) && (buf[3] == 0x02)) {
         if (rx_wavefile == NULL) { //if rx file not open, discard packet
 #ifdef DEBUG
           fprintf(stderr, "*** discarding pcm packet from ambeserver ***\n");
@@ -1225,7 +1225,7 @@ int main(int argc, char **argv)
         fwrite(&buf[6], 1, 320, rx_wavefile);
         rx_ambefcnt++;
       }
-      else if (rxlen == 4+2+9) {
+      else if ((rxlen == 4+2+9) && (buf[0] == 0x61) && (buf[3] == 0x01)) {
         if (tx_wavefile == NULL) { //if tx terminated, discard late packet from ambeserver, not good to tx them after terminator
 #ifdef DEBUG
           fprintf(stderr, "*** discarding ambe packet from ambeserver ***\n");
@@ -1319,7 +1319,7 @@ int main(int argc, char **argv)
             tx_wavefile = NULL;
           }
           char cmdstr[50];
-          sprintf(cmdstr, "python3 dmrbot.py %d", rx_srcid);
+          sprintf(cmdstr, "python3 -u dmrbot.py %d", rx_srcid);
           if (system(cmdstr) != 0) {
             //rx_endt = 0; //cancel tx if script fails
             //continue;
@@ -1354,9 +1354,15 @@ int main(int argc, char **argv)
             rx_endt = 0; //cancel tx
             continue;
           }
+          if (memcmp(tx_wavheader.data_header, "LIST", 4U) == 0) { //skip LIST chunk
+            fseek(tx_wavefile, tx_wavheader.data_bytes, SEEK_CUR);
+            fread(tx_wavheader.data_header, 1, sizeof(tx_wavheader.data_header), tx_wavefile);
+            fread(&tx_wavheader.data_bytes, 1, sizeof(tx_wavheader.data_bytes), tx_wavefile);
+          }
           if ( (memcmp(tx_wavheader.riff_header, "RIFF", 4U) != 0)
             || (memcmp(tx_wavheader.wave_header, "WAVE", 4U) != 0)
-            || (memcmp(tx_wavheader.fmt_header,  "fmt ", 4U) != 0) ) {
+            || (memcmp(tx_wavheader.fmt_header,  "fmt ", 4U) != 0)
+            || (memcmp(tx_wavheader.data_header, "data", 4U) != 0) ) {
             fprintf(stderr, "invalid wav file\n");
             fclose(tx_wavefile);
             tx_wavefile = NULL;
