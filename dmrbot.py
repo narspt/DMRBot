@@ -19,10 +19,68 @@
 import os
 import sys
 import requests
+import re
 import json
 import csv
 import time
 from gtts import gTTS
+
+def get_current_weather(location, units="metric"):
+
+    try:
+        url = "https://www.google.com/search"
+        params = { "hl": "en", "lr": "lang_en", "ie": "UTF-8", "q": "weather " + location }
+        headers = {
+            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
+            "Accept-Language": "en-US,en;q=0.5"
+        }
+        response = requests.get(url, params=params, headers=headers, timeout=60)
+
+        data = dict()
+        data["temp"] = float(re.findall("(?:<span.*?id=\"wob_tm\".*?>)(.*?)(?:<\\/span>)", response.text)[0])
+        data["weather"] = re.findall("(?:<span.*?id=\"wob_dc\".*?>)(.*?)(?:<\\/span>)", response.text)[0]
+        data["precip_prob"] = float(re.findall("(?:<span.*?id=\"wob_pp\".*?>)(.*?)(?:<\\/span>)", response.text)[0].replace("%", ""))
+        data["humidity"] = float(re.findall("(?:<span.*?id=\"wob_hm\".*?>)(.*?)(?:<\\/span>)", response.text)[0].replace("%", ""))
+        data["wind"] = re.findall("(?:<span.*?id=\"wob_ws\".*?>)(.*?)(?:<\\/span>)", response.text)[0]
+
+        try:
+            data["wind_dir"] = int(re.findall("(?:\\\\x3cimg.*?id\\\\x3d\\\\x22wind_image_\\d\\\\x22 style\\\\x3d\\\\x22.*?transform:rotate\\()(\\d+)(?:deg\\))", response.text)[0]) - 90
+            compass_direction = ["N","NE","E","SE","S","SW","W","NW"]
+            data["wind_dir"] = compass_direction[int((data["wind_dir"]/45)+0.5) % 8]
+        except:
+            data["wind_dir"] = ""
+
+        try:
+            data["location"] = re.findall("(?:<span class=\"BBwThe\">)(.*?)(?:<\\/span>)", response.text)[0]
+        except:
+            data["location"] = location
+
+        if "km/h" in data["wind"]:
+            data["wind"] = float(data["wind"].replace("km/h", ""))
+            if units == "imperial":
+                data["wind"] = round(data["wind"] / 1.6, 1)
+                data["temp"] = round(data["temp"] * (9 / 5) + 32, 1)
+        else:
+            data["wind"] = float(data["wind"].replace("mph", ""))
+            if units == "metric":
+                data["wind"] = round(data["wind"] * 1.6, 1)
+                data["temp"] = round((data["temp"] - 32) * (5 / 9), 1)
+
+        weather_info = {
+            "location": data["location"],
+            "temperature": round(data["temp"], 1),
+            "temperature_unit": "fahrenheit" if units == "imperial" else "celsius",
+            "humidity": round(data["humidity"], 0),
+            "sky_conditions": data["weather"],
+            "precipitation_probability": round(data["precip_prob"], 0),
+            "wind_speed": round(data["wind"], 1),
+            "wind_unit": "mph" if units == "imperial" else "km/h",
+            "wind_direction": data["wind_dir"]
+        }
+        return json.dumps(weather_info)
+    except:
+        return json.dumps({"error": "Could not fetch weather for " + location})
+
 
 def main():
     
@@ -141,10 +199,24 @@ def main():
     print("* Query ChatGPT model with the text")
     url = openaiurl + "/chat/completions"
 
+    functions = [
+        {
+            "name": "get_current_weather",
+            "description": "Get the current weather in a given location",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."}
+                },
+                "required": ["location"]
+            },
+        }
+    ]
+
     data = {
         "model": "gpt-3.5-turbo",
-        "messages": [
-        ]
+        "messages": [],
+        "functions": functions
     }
     
     if os.path.isfile("conversation.json"):
@@ -159,7 +231,7 @@ def main():
     else:
         youAreTalkingWith = ""
 
-    data["messages"].insert(0,{"role": "system", "content": "You are a voice capable bot, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
+    data["messages"].insert(0,{"role": "system", "content": "You are a voice capable bot, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
     
     # ask for reply in the same language as input
     speech_to_text += " (reply in " + speech_language + ")"
@@ -181,6 +253,33 @@ def main():
             print("connection error")
     else:
         exit(1)
+
+    if response.json()["choices"][0]["message"].get("function_call"):
+        function_name = response.json()["choices"][0]["message"]["function_call"]["name"]
+        function_args = json.loads(response.json()["choices"][0]["message"]["function_call"]["arguments"])
+        print("function_call: " + function_name + ", arguments: " + json.dumps(function_args))
+        if function_name == "get_current_weather":
+            units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316"} else "metric"
+            function_response = get_current_weather(function_args.get("location"), units)
+            print(function_response)
+        data["messages"].append(response.json()["choices"][0]["message"])
+        data["messages"].append({"role": "function", "name": function_name, "content": function_response})
+        del data["functions"]
+        for i in range(2):
+            if i > 0:
+                time.sleep(2)
+                print("retrying...")
+            try:
+                response = requests.post(url, json=data, headers=headers, timeout=60)
+                print("Status Code:", response.status_code)
+                if response.status_code == 200:
+                    break
+            except requests.exceptions.Timeout:
+                print("connection timeout")
+            except requests.exceptions.RequestException:
+                print("connection error")
+        else:
+            exit(1)
     
     chatgpt_response = response.json()["choices"][0]["message"]["content"]
     print("Response from ChatGPT:", chatgpt_response)
