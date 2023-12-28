@@ -30,6 +30,6 @@ gcc -o dmrbot dmrbot.c
 # Notes
 If you have no AMBEServer available you may use md380-emu from this repository: https://github.com/narspt/md380tools
 
-You need to run this on an ARM cpu system like Raspberry Pi (or use QEMU on x86_64), to compile it you should just need to "cd emulator" and run "make", then you can get the "md380-emu" standalone binary and run it (with "-s port" parameter) to create an emulated AMBEServer.
+You need to run md380-emu on an ARM cpu system like Raspberry Pi (or use QEMU on x86_64), to compile it you should just need to "cd emulator" and run "make", then you can get the "md380-emu" standalone binary and run it (with "-s port" parameter) to create an emulated AMBEServer.
 
 Please note that despite the source code available on the above mentioned repository doesn't itself infringe patents, after compiling it (along with MD380 firmware) or using this emulator may infringe patent rights in your jurisdiction, you are strongly advised to check for any patent restrictions or licencing requirements before compiling or using this!

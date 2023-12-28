@@ -137,9 +137,12 @@ def main():
         "file": open(audio_file_path, "rb")
     }
     
+    # try to hint whisper with callsign and probable language
     data["prompt"] = "callsign:" + callsign
     if str(srcid)[0:3] in {"268", "724"}:
         data["prompt"] += ";language:portuguese"
+    elif str(srcid)[0:3] == "206":
+        data["prompt"] += ";language:dutch"
     data["prompt"] = "[" + data["prompt"] + "]"
     #print("prompt=" + data["prompt"])
     
@@ -190,6 +193,10 @@ def main():
         speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
         if str(srcid)[0:3] in {"268", "724"}:
             speech_language = "portuguese"
+        elif str(srcid)[0:3] == "214":
+            speech_language = "spanish"
+        elif str(srcid)[0:3] == "206":
+            speech_language = "dutch"
         else:
             speech_language = "english"
 
@@ -260,7 +267,7 @@ def main():
         print("function_call: " + function_name + ", arguments: " + json.dumps(function_args))
         if function_name == "get_current_weather":
             units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316"} else "metric"
-            function_response = get_current_weather(function_args.get("location"), units)
+            function_response = get_current_weather(function_args.get("location", ""), units)
             print(function_response)
         data["messages"].append(response.json()["choices"][0]["message"])
         data["messages"].append({"role": "function", "name": function_name, "content": function_response})
@@ -312,6 +319,7 @@ def main():
         "estonian": "et",
         "finnish": "fi",
         "french": "fr",
+        "galician": "gl",
         "gujarati": "gu",
         "hindi": "hi",
         "croatian": "hr",
@@ -363,6 +371,10 @@ def main():
         last_languages.append({"srcid": srcid, "lang": tts_lang})
         with open("last_languages.json", "w") as write_file:
             json.dump(last_languages, write_file, indent = 2)
+    
+    # workaround for unavailable tts
+    if tts_lang == "gl":
+        tts_lang = "es"
     
     # local language accent
     if tts_lang == "en":
