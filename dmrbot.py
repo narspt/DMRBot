@@ -60,11 +60,18 @@ def get_current_weather(location, units="metric"):
             if units == "imperial":
                 data["wind"] = round(data["wind"] / 1.6, 1)
                 data["temp"] = round(data["temp"] * (9 / 5) + 32, 1)
-        else:
+        elif "m/s" in data["wind"]:
+            data["wind"] = float(data["wind"].replace("m/s", "")) * 3.6
+            if units == "imperial":
+                data["wind"] = round(data["wind"] / 1.6, 1)
+                data["temp"] = round(data["temp"] * (9 / 5) + 32, 1)
+        elif "mph" in data["wind"]:
             data["wind"] = float(data["wind"].replace("mph", ""))
             if units == "metric":
                 data["wind"] = round(data["wind"] * 1.6, 1)
                 data["temp"] = round((data["temp"] - 32) * (5 / 9), 1)
+        else:
+            data["wind"] = 0
 
         weather_info = {
             "location": data["location"],
@@ -266,7 +273,7 @@ def main():
         function_args = json.loads(response.json()["choices"][0]["message"]["function_call"]["arguments"])
         print("function_call: " + function_name + ", arguments: " + json.dumps(function_args))
         if function_name == "get_current_weather":
-            units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316"} else "metric"
+            units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316","317"} else "metric"
             function_response = get_current_weather(function_args.get("location", ""), units)
             print(function_response)
         data["messages"].append(response.json()["choices"][0]["message"])
