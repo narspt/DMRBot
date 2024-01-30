@@ -124,6 +124,8 @@ def main():
                 print("connection timeout")
             except requests.exceptions.RequestException:
                 print("connection error")
+            except Exception:
+                pass
         else:
             print("failed to fetch info from radioid.net")
 
