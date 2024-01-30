@@ -21,7 +21,6 @@ import sys
 import requests
 import re
 import json
-import csv
 import time
 from gtts import gTTS
 
@@ -73,12 +72,14 @@ def get_current_weather(location, units="metric"):
         else:
             data["wind"] = 0
 
+        data["weather"] = data["weather"].replace("Clear", "Clear sky")
+
         weather_info = {
             "location": data["location"],
             "temperature": round(data["temp"], 1),
             "temperature_unit": "fahrenheit" if units == "imperial" else "celsius",
             "humidity": round(data["humidity"], 0),
-            "sky_conditions": data["weather"],
+            "weather_conditions": data["weather"],
             "precipitation_probability": round(data["precip_prob"], 0),
             "wind_speed": round(data["wind"], 1),
             "wind_unit": "mph" if units == "imperial" else "km/h",
@@ -91,6 +92,8 @@ def get_current_weather(location, units="metric"):
 
 def main():
     
+    print("* " + time.strftime("%Y-%m-%d %H:%M:%S") + " *")
+    
     try:
         srcid = int(sys.argv[1])
     except:
@@ -98,20 +101,37 @@ def main():
     
     callsign = ""
     name = ""
-    if (srcid > 0) and os.path.isfile("DMRIds.dat"):
-        with open("DMRIds.dat", "r", encoding="utf8", newline="") as ids_file:
-            ids_reader = csv.reader(ids_file, delimiter="\t")
-            for tmp_id in ids_reader:
-                if tmp_id[0] == str(srcid):
-                    print(tmp_id)
-                    callsign = tmp_id[1]
-                    name = tmp_id[2]
-                    break
-    
-    if (not os.path.isfile("DMRIds.dat")) or (time.time() - os.stat("DMRIds.dat").st_mtime > 24*60*60):
-        os.system("{ curl --fail -o DMRIds.tmp -s http://www.pistar.uk/downloads/DMRIds.dat && mv DMRIds.tmp DMRIds.dat; } &")
-    
-    
+    city = ""
+    state = ""
+    country = ""
+    if (srcid > 0):
+        print("* Query radioid.net to get user info")
+        for i in range(2):
+            if i > 0:
+                time.sleep(2)
+                print("retrying...")
+            try:
+                response = requests.get("https://radioid.net/api/dmr/user/?id=" + str(srcid), timeout=20)
+                response_result = response.json()["results"][0]
+                print(response_result)
+                callsign = response_result["callsign"]
+                name = response_result["fname"]
+                city = response_result["city"]
+                state = response_result["state"]
+                country = response_result["country"]
+                break
+            except requests.exceptions.Timeout:
+                print("connection timeout")
+            except requests.exceptions.RequestException:
+                print("connection error")
+        else:
+            print("failed to fetch info from radioid.net")
+
+    # fix cities missing special characters
+    if (country == "Portugal") and (city == "Canecas"):
+        city = "Cane\u00e7as"
+
+
     openaiurl = "https://api.openai.com/v1"
     
     try:
@@ -144,10 +164,16 @@ def main():
         "file": open(audio_file_path, "rb")
     }
     
-    # try to hint whisper with callsign and probable language
+    # try to hint whisper with callsign, location and probable language
     data["prompt"] = "callsign:" + callsign
+    if len(city) > 0:
+        data["prompt"] += ";city:" + city
+    if len(country) > 0:
+        data["prompt"] += ";country:" + country
     if str(srcid)[0:3] in {"268", "724"}:
         data["prompt"] += ";language:portuguese"
+    elif str(srcid)[0:3] == "214":
+        data["prompt"] += ";language:spanish"
     elif str(srcid)[0:3] == "206":
         data["prompt"] += ";language:dutch"
     data["prompt"] = "[" + data["prompt"] + "]"
@@ -197,7 +223,20 @@ def main():
         print("Language:", speech_language)
     else:
         print("no rx audio")
-        speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
+        #speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
+
+        speech_to_text = "Hello"
+        if len(name) > 0:
+            speech_to_text += ", I'm " + name
+        if len(city) > 0:
+            speech_to_text += ", How is the current weather in " + city
+            if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+                speech_to_text += ", " + state
+            if (len(country) > 0):
+                speech_to_text += ", " + country
+            speech_to_text += "?"
+        speech_to_text += " (suffix your response by asking user if you can supply any other information)"
+        
         if str(srcid)[0:3] in {"268", "724"}:
             speech_language = "portuguese"
         elif str(srcid)[0:3] == "214":
@@ -206,6 +245,17 @@ def main():
             speech_language = "dutch"
         else:
             speech_language = "english"
+
+    # workaround frequent mistakes
+    if str(srcid)[0:3] == "268":
+        speech_to_text = speech_to_text.replace("Canessas", "Cane\u00e7as").replace("Canessa", "Cane\u00e7as")
+        if speech_language == "welsh":
+            speech_language = "portuguese"
+    elif str(srcid)[0:3] == "206":
+        if speech_language == "afrikaans":
+            speech_language = "dutch"
+    if speech_language == "maori":
+        speech_language = "english"
 
 
     ########## Query ChatGPT ##########
@@ -237,15 +287,22 @@ def main():
         if time.time() - os.stat("conversation.json").st_mtime < 300:
             with open("conversation.json", "r") as read_file:
                 data["messages"] = json.load(read_file)[-8:]
-    
-    if (len(callsign) > 0) and (len(name) > 0):
-        youAreTalkingWith = "You (assistant) know that you are talking with a ham radio operator, his name is " + name + ", his callsign is " + callsign + ". "
-    elif len(callsign) > 0:
-        youAreTalkingWith = "You (assistant) know that you are talking with a ham radio operator, his callsign is " + callsign + ". "
-    else:
-        youAreTalkingWith = ""
+
+    youAreTalkingWith = "You (assistant) know that you are talking with a ham radio operator"
+    if len(name) > 0:
+        youAreTalkingWith += ", his name is " + name
+    if len(callsign) > 0:
+        youAreTalkingWith += ", his callsign is " + callsign
+    if len(city) > 0:
+        youAreTalkingWith += ", he is located at " + city
+        if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+            youAreTalkingWith += ", " + state
+        if (len(country) > 0):
+            youAreTalkingWith += ", " + country
+    youAreTalkingWith += ". "
 
     data["messages"].insert(0,{"role": "system", "content": "You are a voice capable bot, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
+    #print("system_message=" + data["messages"][0]["content"])
     
     # ask for reply in the same language as input
     speech_to_text += " (reply in " + speech_language + ")"
