@@ -263,24 +263,27 @@ def main():
     print("* Query ChatGPT model with the text")
     url = openaiurl + "/chat/completions"
 
-    functions = [
+    tools = [
         {
-            "name": "get_current_weather",
-            "description": "Get the current weather in a given location",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."}
-                },
-                "required": ["location"]
-            },
+            "type": "function",
+            "function": {
+                "name": "get_current_weather",
+                "description": "Get the current weather in a given location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."}
+                    },
+                    "required": ["location"]
+                }
+            }
         }
     ]
 
     data = {
         "model": "gpt-3.5-turbo",
         "messages": [],
-        "functions": functions
+        "tools": tools
     }
     
     if os.path.isfile("conversation.json"):
@@ -309,33 +312,9 @@ def main():
     
     data["messages"].append({"role": "user", "content": speech_to_text})
     
-    for i in range(2):
-        if i > 0:
-            time.sleep(2)
-            print("retrying...")
-        try:
-            response = requests.post(url, json=data, headers=headers, timeout=60)
-            print("Status Code:", response.status_code)
-            if response.status_code == 200:
-                break
-        except requests.exceptions.Timeout:
-            print("connection timeout")
-        except requests.exceptions.RequestException:
-            print("connection error")
-    else:
-        exit(1)
-
-    if response.json()["choices"][0]["message"].get("function_call"):
-        function_name = response.json()["choices"][0]["message"]["function_call"]["name"]
-        function_args = json.loads(response.json()["choices"][0]["message"]["function_call"]["arguments"])
-        print("function_call: " + function_name + ", arguments: " + json.dumps(function_args))
-        if function_name == "get_current_weather":
-            units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316","317"} else "metric"
-            function_response = get_current_weather(function_args.get("location", ""), units)
-            print(function_response)
-        data["messages"].append(response.json()["choices"][0]["message"])
-        data["messages"].append({"role": "function", "name": function_name, "content": function_response})
-        del data["functions"]
+    response = None
+    def post_to_chatgpt_api():
+        nonlocal response
         for i in range(2):
             if i > 0:
                 time.sleep(2)
@@ -351,6 +330,23 @@ def main():
                 print("connection error")
         else:
             exit(1)
+    post_to_chatgpt_api()
+    
+    if response.json()["choices"][0]["message"].get("tool_calls"):
+        data["messages"].append(response.json()["choices"][0]["message"])
+        for tool_call in response.json()["choices"][0]["message"]["tool_calls"]:
+            tool_response = ""
+            if tool_call.get("function"):
+                function_name = tool_call["function"]["name"]
+                function_args = json.loads(tool_call["function"]["arguments"])
+                print("function: " + function_name + ", arguments: " + json.dumps(function_args))
+                if function_name == "get_current_weather":
+                    units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316","317"} else "metric"
+                    tool_response = get_current_weather(function_args.get("location", ""), units)
+            print(tool_response)
+            data["messages"].append({"role": "tool", "tool_call_id": tool_call["id"], "content": tool_response})
+        del data["tools"]
+        post_to_chatgpt_api()
     
     chatgpt_response = response.json()["choices"][0]["message"]["content"]
     print("Response from ChatGPT:", chatgpt_response)
