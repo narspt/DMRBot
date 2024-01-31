@@ -108,7 +108,7 @@ def main():
         print("* Query radioid.net to get user info")
         for i in range(2):
             if i > 0:
-                time.sleep(2)
+                time.sleep(5)
                 print("retrying...")
             try:
                 response = requests.get("https://radioid.net/api/dmr/user/?id=" + str(srcid), timeout=20)
@@ -205,7 +205,7 @@ def main():
     if os.stat(audio_file_path).st_size > 44+16000*0.5:
         for i in range(3):
             if i > 0:
-                time.sleep(2)
+                time.sleep(5)
                 print("retrying...")
             try:
                 response = requests.post(url, files=files, data=data, headers=headers, timeout=30)
@@ -225,28 +225,8 @@ def main():
         print("Language:", speech_language)
     else:
         print("no rx audio")
-        #speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
-
-        speech_to_text = "Hello"
-        if len(name) > 0:
-            speech_to_text += ", I'm " + name
-        if len(city) > 0:
-            speech_to_text += ", How is the current weather in " + city
-            if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
-                speech_to_text += ", " + state
-            if (len(country) > 0):
-                speech_to_text += ", " + country
-            speech_to_text += "?"
-        speech_to_text += " (suffix your response by asking user if you can supply any other information)"
-        
-        if str(srcid)[0:3] in {"268", "724"}:
-            speech_language = "portuguese"
-        elif str(srcid)[0:3] == "214":
-            speech_language = "spanish"
-        elif str(srcid)[0:3] == "206":
-            speech_language = "dutch"
-        else:
-            speech_language = "english"
+        speech_to_text = ""
+        speech_language = ""
 
     # workaround frequent mistakes
     if str(srcid)[0:3] == "268":
@@ -293,6 +273,30 @@ def main():
             with open("conversation.json", "r") as read_file:
                 data["messages"] = json.load(read_file)[-8:]
 
+    if len(speech_to_text) < 1:
+        if (len(data["messages"]) >= 2) and (data["messages"][-2]["role"] == "tool"):
+            speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
+        else:
+            speech_to_text = "Hello"
+            if len(name) > 0:
+                speech_to_text += ", I'm " + name
+            if len(city) > 0:
+                speech_to_text += ", How is the current weather in " + city
+                if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+                    speech_to_text += ", " + state
+                if (len(country) > 0):
+                    speech_to_text += ", " + country
+                speech_to_text += "?"
+            speech_to_text += " (suffix your response by asking user if you can supply any other information)"
+        if str(srcid)[0:3] in {"268", "724"}:
+            speech_language = "portuguese"
+        elif str(srcid)[0:3] == "214":
+            speech_language = "spanish"
+        elif str(srcid)[0:3] == "206":
+            speech_language = "dutch"
+        else:
+            speech_language = "english"
+
     youAreTalkingWith = "You (assistant) know that you are talking with a ham radio operator"
     if len(name) > 0:
         youAreTalkingWith += ", his name is " + name
@@ -319,7 +323,7 @@ def main():
         nonlocal response
         for i in range(2):
             if i > 0:
-                time.sleep(2)
+                time.sleep(5)
                 print("retrying...")
             try:
                 response = requests.post(url, json=data, headers=headers, timeout=60)
@@ -461,7 +465,7 @@ def main():
     
     for i in range(2):
         if i > 0:
-            time.sleep(2)
+            time.sleep(5)
             print("retrying...")
         try:
             tts.save("tx.mp3")
