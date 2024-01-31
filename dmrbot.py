@@ -271,7 +271,7 @@ def main():
     if os.path.isfile("conversation.json"):
         if time.time() - os.stat("conversation.json").st_mtime < 300:
             with open("conversation.json", "r") as read_file:
-                data["messages"] = json.load(read_file)[-8:]
+                data["messages"] = json.load(read_file)
 
     if len(speech_to_text) < 1:
         if (len(data["messages"]) >= 2) and (data["messages"][-2]["role"] == "tool"):
@@ -296,6 +296,13 @@ def main():
             speech_language = "dutch"
         else:
             speech_language = "english"
+
+    for msg in data["messages"].copy():
+        if msg["role"] in {"system","tool"}:
+            data["messages"].remove(msg)
+        elif (msg["role"] == "assistant") and (msg.get("tool_calls")):
+            data["messages"].remove(msg)
+    data["messages"] = data["messages"][-8:]
 
     youAreTalkingWith = "You (assistant) know that you are talking with a ham radio operator"
     if len(name) > 0:
@@ -330,6 +337,7 @@ def main():
                 print("Status Code:", response.status_code)
                 if response.status_code == 200:
                     break
+                print(response.text)
             except requests.exceptions.Timeout:
                 print("connection timeout")
             except requests.exceptions.RequestException:
@@ -359,8 +367,6 @@ def main():
     print("Total Tokens:", response.json()["usage"]["total_tokens"])
     
     data["messages"].append({"role": "assistant", "content": chatgpt_response})
-    if data["messages"][0]["role"] == "system":
-        data["messages"].pop(0)
     with open("conversation.json", "w") as write_file:
         json.dump(data["messages"], write_file, indent = 2)
 
