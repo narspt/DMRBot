@@ -36,22 +36,24 @@ def get_current_weather(location, units="metric"):
         response = requests.get(url, params=params, headers=headers, timeout=60)
 
         data = dict()
-        data["temp"] = float(re.findall("(?:<span.*?id=\"wob_tm\".*?>)(.*?)(?:<\\/span>)", response.text)[0])
-        data["weather"] = re.findall("(?:<span.*?id=\"wob_dc\".*?>)(.*?)(?:<\\/span>)", response.text)[0]
-        data["precip_prob"] = float(re.findall("(?:<span.*?id=\"wob_pp\".*?>)(.*?)(?:<\\/span>)", response.text)[0].replace("%", ""))
-        data["humidity"] = float(re.findall("(?:<span.*?id=\"wob_hm\".*?>)(.*?)(?:<\\/span>)", response.text)[0].replace("%", ""))
-        data["wind"] = re.findall("(?:<span.*?id=\"wob_ws\".*?>)(.*?)(?:<\\/span>)", response.text)[0]
+        data["temp"] = float(re.search("(?:<span.*?id=\"wob_tm\".*?>)(.*?)(?:</span>)", response.text).group(1))
+        data["weather"] = re.search("(?:<span.*?id=\"wob_dc\".*?>)(.*?)(?:</span>)", response.text).group(1)
+        data["precip_prob"] = float(re.search("(?:<span.*?id=\"wob_pp\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
+        data["humidity"] = float(re.search("(?:<span.*?id=\"wob_hm\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
+        data["wind"] = re.search("(?:<span.*?id=\"wob_ws\".*?>)(.*?)(?:</span>)", response.text).group(1)
 
-        try:
-            data["wind_dir"] = int(re.findall("(?:\\\\x3cimg.*?id\\\\x3d\\\\x22wind_image_\\d\\\\x22 style\\\\x3d\\\\x22.*?transform:rotate\\()(\\d+)(?:deg\\))", response.text)[0]) - 90
+        match = re.search("(?:\\\\x3cimg.*?id\\\\x3d\\\\x22wind_image_\\d\\\\x22 style\\\\x3d\\\\x22.*?transform:rotate\\()(\\d+)(?:deg\\))", response.text)
+        if match:
+            data["wind_dir"] = int(match.group(1)) - 90
             compass_direction = ["N","NE","E","SE","S","SW","W","NW"]
             data["wind_dir"] = compass_direction[int((data["wind_dir"]/45)+0.5) % 8]
-        except:
+        else:
             data["wind_dir"] = ""
 
-        try:
-            data["location"] = re.findall("(?:<span class=\"BBwThe\">)(.*?)(?:<\\/span>)", response.text)[0]
-        except:
+        match = re.search("(?:<span class=\"BBwThe\">)(.*?)(?:</span>)", response.text)
+        if match:
+            data["location"] = match.group(1)
+        else:
             data["location"] = location
 
         if "km/h" in data["wind"]:
@@ -76,13 +78,13 @@ def get_current_weather(location, units="metric"):
 
         weather_info = {
             "location": data["location"],
-            "temperature": round(data["temp"], 1),
+            "temperature": round(data["temp"]),
             "temperature_unit": "fahrenheit" if units == "imperial" else "celsius",
-            "humidity": round(data["humidity"], 0),
+            "humidity": round(data["humidity"]),
             "weather_conditions": data["weather"],
-            "precipitation_probability": round(data["precip_prob"], 0),
-            "wind_speed": round(data["wind"], 1),
-            "wind_unit": "mph" if units == "imperial" else "km/h",
+            "precipitation_probability": round(data["precip_prob"]),
+            "wind_speed": round(data["wind"]),
+            "wind_speed_unit": "miles per hour" if units == "imperial" else "kilometres per hour",
             "wind_direction": data["wind_dir"]
         }
         return json.dumps(weather_info)
@@ -195,8 +197,16 @@ def main():
         else:
             data["language"] = last_languages[-1]["lang"]
     
-    # uncomment the following line to force Speech-to-Text on specific language
+    ### Uncomment the following line to always force speech-to-text language ###
     #data["language"] = "pt"
+    
+    ### Always force speech-to-text language for specific src mcc ###
+    #if str(srcid)[0:3] in {"268", "724"}:
+    #    data["language"] = "pt"
+    
+    ### Always force speech-to-text language for specific src ids ###
+    if srcid in {2681009, 2680237}:
+        data["language"] = "pt"
     
     if "language" in data:
         print("Forced Language: " + data["language"])
@@ -318,7 +328,6 @@ def main():
     youAreTalkingWith += ". "
 
     data["messages"].insert(0,{"role": "system", "content": "You are a voice capable bot, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
-    #print("system_message=" + data["messages"][0]["content"])
     
     # ask for reply in the same language as input
     speech_to_text += " (reply in " + speech_language + ")"
