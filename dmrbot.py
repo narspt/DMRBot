@@ -24,7 +24,7 @@ import json
 import time
 from gtts import gTTS
 
-def get_current_weather(location, units="metric"):
+def get_current_weather(location, units="metric", forecast=False):
 
     try:
         url = "https://www.google.com/search"
@@ -38,8 +38,8 @@ def get_current_weather(location, units="metric"):
         data = dict()
         data["temp"] = float(re.search("(?:<span.*?id=\"wob_tm\".*?>)(.*?)(?:</span>)", response.text).group(1))
         data["weather"] = re.search("(?:<span.*?id=\"wob_dc\".*?>)(.*?)(?:</span>)", response.text).group(1)
-        data["precip_prob"] = float(re.search("(?:<span.*?id=\"wob_pp\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
-        data["humidity"] = float(re.search("(?:<span.*?id=\"wob_hm\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
+        data["precip_prob"] = int(re.search("(?:<span.*?id=\"wob_pp\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
+        data["humidity"] = int(re.search("(?:<span.*?id=\"wob_hm\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
         data["wind"] = re.search("(?:<span.*?id=\"wob_ws\".*?>)(.*?)(?:</span>)", response.text).group(1)
 
         match = re.search("(?:\\\\x3cimg.*?id\\\\x3d\\\\x22wind_image_\\d\\\\x22 style\\\\x3d\\\\x22.*?transform:rotate\\()(\\d+)(?:deg\\))", response.text)
@@ -56,37 +56,52 @@ def get_current_weather(location, units="metric"):
         else:
             data["location"] = location
 
-        if "km/h" in data["wind"]:
-            data["wind"] = float(data["wind"].replace("km/h", ""))
+        forecast_data = []
+        if forecast:
+            for i in range(4):
+                match = re.search("(?:<div class=\"wob_df.*?\" data-wob-di=\"" + str(i) + "\".*?<div class=\"Z1VzSb\" aria-label=\")(.*?)(?:\">.*?alt=\")(.*?)(?:\"></g-img>.*?<span class=\"wob_t\" style=\"display:inline\">)(.*?)(?:</span>.*?<span class=\"wob_t\" style=\"display:inline\">)(.*?)(?:</span>)", response.text)
+                if match:
+                    forecast_data.append({"day": match.group(1), "weather_conditions": match.group(2), "max_temperature": int(match.group(3)), "min_temperature": int(match.group(4))})
+
+        if ("km/h" in data["wind"]) or ("m/s" in data["wind"]):
+            if "m/s" in data["wind"]:
+                data["wind"] = float(data["wind"].replace("m/s", "")) * 3.6
+            else:
+                data["wind"] = float(data["wind"].replace("km/h", ""))
             if units == "imperial":
                 data["wind"] = round(data["wind"] / 1.6, 1)
                 data["temp"] = round(data["temp"] * (9 / 5) + 32, 1)
-        elif "m/s" in data["wind"]:
-            data["wind"] = float(data["wind"].replace("m/s", "")) * 3.6
-            if units == "imperial":
-                data["wind"] = round(data["wind"] / 1.6, 1)
-                data["temp"] = round(data["temp"] * (9 / 5) + 32, 1)
+                for i in range(len(forecast_data)):
+                    forecast_data[i]["max_temperature"] = round(forecast_data[i]["max_temperature"] * (9 / 5) + 32)
+                    forecast_data[i]["min_temperature"] = round(forecast_data[i]["min_temperature"] * (9 / 5) + 32)
         elif "mph" in data["wind"]:
             data["wind"] = float(data["wind"].replace("mph", ""))
             if units == "metric":
                 data["wind"] = round(data["wind"] * 1.6, 1)
                 data["temp"] = round((data["temp"] - 32) * (5 / 9), 1)
+                for i in range(len(forecast_data)):
+                    forecast_data[i]["max_temperature"] = round((forecast_data[i]["max_temperature"] - 32) * (5 / 9))
+                    forecast_data[i]["min_temperature"] = round((forecast_data[i]["min_temperature"] - 32) * (5 / 9))
         else:
             data["wind"] = 0
 
         data["weather"] = data["weather"].replace("Clear", "Clear sky")
+        for i in range(len(forecast_data)):
+            forecast_data[i]["weather_conditions"] = forecast_data[i]["weather_conditions"].replace("Clear", "Clear sky")
 
         weather_info = {
             "location": data["location"],
             "temperature": round(data["temp"]),
             "temperature_unit": "fahrenheit" if units == "imperial" else "celsius",
-            "humidity": round(data["humidity"]),
+            "humidity": data["humidity"],
             "weather_conditions": data["weather"],
-            "precipitation_probability": round(data["precip_prob"]),
+            "precipitation_probability": data["precip_prob"],
             "wind_speed": round(data["wind"]),
             "wind_speed_unit": "miles per hour" if units == "imperial" else "kilometres per hour",
             "wind_direction": data["wind_dir"]
         }
+        if forecast:
+            weather_info["forecast"] = forecast_data
         return json.dumps(weather_info)
     except:
         return json.dumps({"error": "Could not fetch weather for " + location})
@@ -264,9 +279,10 @@ def main():
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."}
+                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."},
+                        "forecast": {"type": "boolean", "description": "Include forecast for next days."}
                     },
-                    "required": ["location"]
+                    "required": ["location", "forecast"]
                 }
             }
         }
@@ -365,7 +381,7 @@ def main():
                 print("function: " + function_name + ", arguments: " + json.dumps(function_args))
                 if function_name == "get_current_weather":
                     units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316","317"} else "metric"
-                    tool_response = get_current_weather(function_args.get("location", ""), units)
+                    tool_response = get_current_weather(function_args.get("location", ""), units, function_args.get("forecast", False))
             print(tool_response)
             data["messages"].append({"role": "tool", "tool_call_id": tool_call["id"], "content": tool_response})
         del data["tools"]
@@ -474,6 +490,11 @@ def main():
         tts_tld = "fr"
     else:
         tts_tld = "com"
+    
+    # workaround google tts mistakes
+    chatgpt_response = chatgpt_response.replace("\u00b0C.", "\u00b0C .")
+    if tts_lang == "pt":
+        chatgpt_response = chatgpt_response.replace("km/h", "quil\u00f4metros por hora")
     
     print("lang=" + tts_lang + ", tld=" + tts_tld)
     tts = gTTS(chatgpt_response, lang=tts_lang, tld=tts_tld, slow=False)
