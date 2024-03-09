@@ -183,18 +183,46 @@ def main():
         "file": open(audio_file_path, "rb")
     }
     
+    mccLang = None
+    if str(srcid)[:3] in {"268", "724"}:
+        mccLang = "portuguese"
+    elif int(str(srcid)[:3]) in {214,722,736,730,732,712,368,706,740,704,627,708,334,710,714,744,716,330,370,748,734}:
+        mccLang = "spanish"
+    elif str(srcid)[:3] == "208":
+        mccLang = "french"
+    elif str(srcid)[:3] in {"262", "232"}:
+        mccLang = "german"
+    elif str(srcid)[:3] == "206":
+        mccLang = "dutch"
+    elif str(srcid)[:3] == "222":
+        mccLang = "italian"
+    elif str(srcid)[:3] == "202":
+        mccLang = "greek"
+    elif str(srcid)[:3] == "250":
+        mccLang = "russian"
+    elif str(srcid)[:3] == "255":
+        mccLang = "ukrainian"
+    elif str(srcid)[:3] == "260":
+        mccLang = "polish"
+    elif str(srcid)[:3] == "286":
+        mccLang = "turkish"
+    elif str(srcid)[:3] in {"460", "461"}:
+        mccLang = "chinese"
+    elif str(srcid)[:3] in {"440", "441"}:
+        mccLang = "japanese"
+    elif str(srcid)[:3] == "450":
+        mccLang = "korean"
+    
     # try to hint whisper with callsign, location and probable language
     data["prompt"] = "callsign:" + callsign
     if len(city) > 0:
         data["prompt"] += ";city:" + city
     if len(country) > 0:
         data["prompt"] += ";country:" + country
-    if str(srcid)[0:3] in {"268", "724"}:
-        data["prompt"] += ";language:portuguese"
-    elif str(srcid)[0:3] == "214":
-        data["prompt"] += ";language:spanish"
-    elif str(srcid)[0:3] == "206":
-        data["prompt"] += ";language:dutch"
+    if mccLang is not None:
+        data["prompt"] += ";language:" + mccLang
+    if str(srcid)[:4] == "2685":  #workaround
+        data["prompt"] += ";city:Loul\u00e9"
     data["prompt"] = "[" + data["prompt"] + "]"
     #print("prompt=" + data["prompt"])
     
@@ -253,16 +281,24 @@ def main():
         speech_to_text = ""
         speech_language = ""
 
-    # workaround frequent mistakes
+    # workaround frequent whisper mistakes
     if str(srcid)[0:3] == "268":
         speech_to_text = speech_to_text.replace("Canessas", "Cane\u00e7as").replace("Canessa", "Cane\u00e7as")
         if speech_language == "welsh":
             speech_language = "portuguese"
+    elif str(srcid)[0:3] == "214":
+        if speech_language in {"welsh", "nynorsk"}:
+            speech_language = "spanish"
+        if speech_language == "galician":
+            if str(callsign)[0:3] not in {"EA1", "EB1", "EC1"}:
+                speech_language = "spanish"
     elif str(srcid)[0:3] == "206":
-        if speech_language == "afrikaans":
+        if speech_language in {"afrikaans", "nynorsk"}:
             speech_language = "dutch"
     if speech_language == "maori":
         speech_language = "english"
+    if (speech_to_text == "...") or speech_to_text.endswith("Amara.org"):
+        speech_to_text = "";
 
 
     ########## Query ChatGPT ##########
@@ -289,7 +325,9 @@ def main():
     ]
 
     data = {
-        "model": "gpt-3.5-turbo",
+        #"model": "gpt-3.5-turbo",
+        "model": "gpt-3.5-turbo-0613",
+        #"model": "gpt-4-turbo-preview",
         "messages": [],
         "tools": tools
     }
@@ -300,26 +338,22 @@ def main():
                 data["messages"] = json.load(read_file)
 
     if len(speech_to_text) < 1:
-        if (len(data["messages"]) >= 2) and (data["messages"][-2]["role"] == "tool"):
-            speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
-        else:
-            speech_to_text = "Hello"
-            if len(name) > 0:
-                speech_to_text += ", I'm " + name
-            if len(city) > 0:
-                speech_to_text += ", How is the current weather in " + city
-                if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
-                    speech_to_text += ", " + state
-                if (len(country) > 0):
-                    speech_to_text += ", " + country
-                speech_to_text += "?"
-            speech_to_text += " (suffix your response by asking user if you can supply any other information)"
-        if str(srcid)[0:3] in {"268", "724"}:
-            speech_language = "portuguese"
-        elif str(srcid)[0:3] == "214":
-            speech_language = "spanish"
-        elif str(srcid)[0:3] == "206":
-            speech_language = "dutch"
+        speech_to_text = "Hello"
+        if len(name) > 0:
+            speech_to_text += ", I'm " + name
+        if len(city) > 0:
+            speech_to_text += ", How is the current weather in " + city
+            if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+                speech_to_text += ", " + state
+            if (len(country) > 0):
+                speech_to_text += ", " + country
+            speech_to_text += "?"
+        speech_to_text += " (suffix your response by asking user if you can supply any other information)"
+        if (len(data["messages"]) >= 4):
+            if (data["messages"][-2]["role"] == "tool") and data["messages"][-4].get("content", "").startswith(speech_to_text):
+                speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
+        if mccLang is not None:
+            speech_language = mccLang
         else:
             speech_language = "english"
 
