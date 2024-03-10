@@ -192,7 +192,7 @@ def main():
         mccLang = "french"
     elif str(srcid)[:3] in {"262", "232"}:
         mccLang = "german"
-    elif str(srcid)[:3] == "206":
+    elif str(srcid)[:3] in {"204", "206"}:
         mccLang = "dutch"
     elif str(srcid)[:3] == "222":
         mccLang = "italian"
@@ -325,9 +325,9 @@ def main():
     ]
 
     data = {
-        #"model": "gpt-3.5-turbo",
-        "model": "gpt-3.5-turbo-0613",
-        #"model": "gpt-4-turbo-preview",
+        #"model": "gpt-3.5-turbo",  # Latest GPT-3.5 Turbo version
+        "model": "gpt-3.5-turbo-0613",  # Better than latest 3.5, will be deprecated on 13 Jun 2024
+        #"model": "gpt-4-turbo-preview",  # Latest GPT-4 Turbo version, very expensive!
         "messages": [],
         "tools": tools
     }
@@ -503,10 +503,6 @@ def main():
         with open("last_languages.json", "w") as write_file:
             json.dump(last_languages, write_file, indent = 2)
     
-    # workaround for unavailable tts
-    if tts_lang == "gl":
-        tts_lang = "es"
-    
     # local language accent
     if tts_lang == "en":
         if str(srcid)[0:3] in {"234", "235"}:
@@ -531,7 +527,7 @@ def main():
         chatgpt_response = chatgpt_response.replace("km/h", "quil\u00f4metros por hora")
     
     print("lang=" + tts_lang + ", tld=" + tts_tld)
-    tts = gTTS(chatgpt_response, lang=tts_lang, tld=tts_tld, slow=False)
+    tts = gTTS(chatgpt_response, lang=tts_lang, tld=tts_tld, slow=False, lang_check=False)
     
     for i in range(2):
         if i > 0:
