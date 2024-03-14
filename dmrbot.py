@@ -149,6 +149,8 @@ def main():
     # fix cities missing special characters
     if (country == "Portugal") and (city == "Canecas"):
         city = "Cane\u00e7as"
+    if (country == "Spain") and (city == "La Guardia de Jan"):
+        city = "La Guardia de Ja\u00e9n"
 
 
     openaiurl = "https://api.openai.com/v1"
@@ -244,7 +246,7 @@ def main():
     #data["language"] = "pt"
     
     ### Always force speech-to-text language for specific src mcc ###
-    #if str(srcid)[0:3] in {"268", "724"}:
+    #if str(srcid)[:3] in {"268", "724"}:
     #    data["language"] = "pt"
     
     ### Always force speech-to-text language for specific src ids ###
@@ -282,19 +284,15 @@ def main():
         speech_language = ""
 
     # workaround frequent whisper mistakes
-    if str(srcid)[0:3] == "268":
-        speech_to_text = speech_to_text.replace("Canessas", "Cane\u00e7as").replace("Canessa", "Cane\u00e7as")
-        if speech_language == "welsh":
-            speech_language = "portuguese"
-    elif str(srcid)[0:3] == "214":
-        if speech_language in {"welsh", "nynorsk"}:
-            speech_language = "spanish"
+    if mccLang in {"portuguese", "spanish"}:
+        if speech_language in {"latin", "welsh", "nynorsk"}:
+            speech_language = mccLang
         if speech_language == "galician":
-            if str(callsign)[0:3] not in {"EA1", "EB1", "EC1"}:
+            if str(callsign)[:3] not in {"EA1", "EB1", "EC1"}:
                 speech_language = "spanish"
-    elif str(srcid)[0:3] == "206":
+    if mccLang == "dutch":
         if speech_language in {"afrikaans", "nynorsk"}:
-            speech_language = "dutch"
+            speech_language = mccLang
     if speech_language == "maori":
         speech_language = "english"
     if (speech_to_text == "...") or speech_to_text.endswith("Amara.org"):
@@ -343,7 +341,7 @@ def main():
             speech_to_text += ", I'm " + name
         if len(city) > 0:
             speech_to_text += ", How is the current weather in " + city
-            if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+            if (str(srcid)[:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
                 speech_to_text += ", " + state
             if (len(country) > 0):
                 speech_to_text += ", " + country
@@ -371,7 +369,7 @@ def main():
         youAreTalkingWith += ", his callsign is " + callsign
     if len(city) > 0:
         youAreTalkingWith += ", he is located at " + city
-        if (str(srcid)[0:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+        if (str(srcid)[:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
             youAreTalkingWith += ", " + state
         if (len(country) > 0):
             youAreTalkingWith += ", " + country
@@ -411,10 +409,13 @@ def main():
             tool_response = ""
             if tool_call.get("function"):
                 function_name = tool_call["function"]["name"]
-                function_args = json.loads(tool_call["function"]["arguments"])
+                try:
+                    function_args = json.loads(tool_call["function"]["arguments"])
+                except:
+                    function_args = {}
                 print("function: " + function_name + ", arguments: " + json.dumps(function_args))
                 if function_name == "get_current_weather":
-                    units = "imperial" if str(srcid)[0:3] in {"310","311","312","313","314","315","316","317"} else "metric"
+                    units = "imperial" if str(srcid)[:3] in {"310","311","312","313","314","315","316","317"} else "metric"
                     tool_response = get_current_weather(function_args.get("location", ""), units, function_args.get("forecast", False))
             print(tool_response)
             data["messages"].append({"role": "tool", "tool_call_id": tool_call["id"], "content": tool_response})
@@ -505,12 +506,12 @@ def main():
     
     # local language accent
     if tts_lang == "en":
-        if str(srcid)[0:3] in {"234", "235"}:
+        if str(srcid)[:3] in {"234", "235"}:
             tts_tld = "co.uk"
         else:
             tts_tld = "us"
     elif tts_lang == "pt":
-        if str(srcid)[0:3] == "724":
+        if str(srcid)[:3] == "724":
             tts_tld = "com.br"
         else:
             tts_tld = "pt"
