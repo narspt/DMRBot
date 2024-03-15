@@ -289,7 +289,7 @@ def main():
             speech_language = mccLang
         if speech_language == "galician":
             if str(callsign)[:3] not in {"EA1", "EB1", "EC1"}:
-                speech_language = "spanish"
+                speech_language = mccLang
     if mccLang == "dutch":
         if speech_language in {"afrikaans", "nynorsk"}:
             speech_language = mccLang
