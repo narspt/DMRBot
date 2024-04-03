@@ -1,9 +1,9 @@
 # DMRBot - ChatGPT Voice Bot for DMR
-This software connects to a DMR "master" (using MMDVM protocol) and provides a ChatGPT voice-capable AI bot that can answer questions and provide information. The software consists of a main program, which is essentially a DMR client responsible for connecting to the master and decoding/encoding audio using AMBEServer, and a Python helper script to process the received audio and interface with remote APIs.
+This software connects to a DMR "master" (using MMDVM protocol) and provides a ChatGPT voice-capable AI bot that can answer questions and provide information. The software consists of a main program (which is essentially a DMR client responsible for connecting to the master and decoding/encoding audio using an AMBEServer) and a Python helper script to process the received audio using remote APIs.
 
 OpenAI Whisper API is used for speech recognition and Google Translate's text-to-speech API for speech synthesis. Speech recognition supports multiple languages and the bot is ready to answer in the same language the user speaks. Speech recognition tends to perform better in English, for other languages it may sometimes be problematic with very short sentences, such as those with only one or two words. When interacting with the bot, it is always better to speak clearly and formalize normal/polite questions, as you would when speaking to another person, the more words you say the better the speech recognition will function.
 
-An additional feature is that if the user transmits for 1 second without speaking, the bot will default to replying with the current weather information for the user's location.
+An additional feature is that if the user transmits for (at least) 1 second without speaking, the bot will default to replying with the current weather information for the user's location. The bot can also provide weather forecast for the next 3 days upon request.
 
 You can test the bot live at BrandMeister TG 268940 or TG 214990, as well as on FreeDMR TG 21490.
 
@@ -32,8 +32,8 @@ gcc -o dmrbot dmrbot.c
 ```
 
 # Additional Notes
-If you do not have an AMBEServer available, you may use md380-emu for testing purposes, from this repository: https://github.com/narspt/md380tools
+If you do not have an AMBEServer available, you may use md380-emu for testing purposes, available at this repository: https://github.com/narspt/md380tools
 
 You need to run md380-emu on an ARM cpu system like Raspberry Pi (or use qemu-user on x86_64), to compile it you should just need to "cd emulator" and run "make", then you can get the "md380-emu" standalone binary and run it (with "-s port" parameter) to create an emulated AMBEServer.
 
-Please be aware that although the source code in the aforementioned repository does not infringe any patents on its own, compiling it (together with MD380 firmware) or using the resulting emulator may violate patent rights in your jurisdiction. It is strongly recommended to verify any patent restrictions or licensing requirements before proceeding with compilation or use!
+Please be aware that although the source code in the aforementioned repository does not infringe any patents on its own, compiling it (together with MD380 firmware) or using the resulting emulator may violate patent rights in your jurisdiction. It is strongly recommended to verify any patent restrictions or licensing requirements before proceeding with compilation or use of this emulator!
