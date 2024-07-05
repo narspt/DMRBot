@@ -4,7 +4,10 @@
 
     Based on code from:
     reflector_connectors	https://github.com/nostar/reflector_connectors
+      Copyright (C) 2019 Doug McLain
     MMDVM_CM	https://github.com/juribeparada/MMDVM_CM
+      Copyright (C) 2018 by Andy Uribe CA6JAU
+      Copyright (C) 2016,2017 by Jonathan Naylor G4KLX
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -242,11 +245,7 @@ static inline void set_uint32(unsigned char* cp, uint32_t v)
 
 void process_signal(int sig)
 {
-	static uint32_t c1 = 0;
-	static uint32_t c2 = 0;
-	static int cnt = 0;
 	uint8_t b[20];
-	uint8_t out[55];
 	if(sig == SIGINT){
 		fprintf(stderr, "\n\nShutting down link\n");
 		b[0] = 'R';
@@ -270,7 +269,6 @@ void process_signal(int sig)
 		exit(EXIT_SUCCESS);
 	}
 	if(sig == SIGALRM){
-		++cnt;
 		char tag[] = { 'R','P','T','P','I','N','G' };
 		memcpy(b, tag, 7);
 		b[7] = (dmrid >> 24) & 0xff;
@@ -1385,7 +1383,6 @@ int main(int argc, char **argv)
           buf[5] = (tx_srcid >> 16) & 0xff;
           buf[6] = (tx_srcid >> 8) & 0xff;
           buf[7] = (tx_srcid >> 0) & 0xff;
-          tx_tgid = host1_tg;
           buf[8] = (host1_tg >> 16) & 0xff;
           buf[9] = (host1_tg >> 8) & 0xff;
           buf[10] = (host1_tg >> 0) & 0xff;
@@ -1442,7 +1439,6 @@ int main(int argc, char **argv)
             buf[5] = (tx_srcid >> 16) & 0xff;
             buf[6] = (tx_srcid >> 8) & 0xff;
             buf[7] = (tx_srcid >> 0) & 0xff;
-            tx_tgid = host1_tg;
             buf[8] = (host1_tg >> 16) & 0xff;
             buf[9] = (host1_tg >> 8) & 0xff;
             buf[10] = (host1_tg >> 0) & 0xff;
