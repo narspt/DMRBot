@@ -111,27 +111,37 @@ def main():
     
     print("* " + time.strftime("%Y-%m-%d %H:%M:%S") + " *")
     
-    try:
-        srcid = int(sys.argv[1])
-    except:
-        srcid = 0
-    
+    srcid = 0
     callsign = ""
+    try:
+        if sys.argv[1].isnumeric():
+            srcid = int(sys.argv[1])
+        else:
+            callsign = sys.argv[1].strip()
+    except:
+        pass
+    
     name = ""
     city = ""
     state = ""
     country = ""
-    if (srcid > 0):
+    if (srcid > 0) or (len(callsign) > 0):
         print("* Query radioid.net to get user info")
         for i in range(2):
             if i > 0:
                 time.sleep(5)
                 print("retrying...")
             try:
-                response = requests.get("https://radioid.net/api/dmr/user/?id=" + str(srcid), timeout=20)
-                response_result = response.json()["results"][0]
-                print(response_result)
-                callsign = response_result["callsign"]
+                if (srcid > 0):
+                    response = requests.get("https://radioid.net/api/dmr/user/?id=" + str(srcid), timeout=20)
+                    response_result = response.json()["results"][0]
+                    print(response_result)
+                    callsign = response_result["callsign"]
+                elif (len(callsign) > 0):
+                    response = requests.get("https://radioid.net/api/dmr/user/?callsign=" + callsign, timeout=20)
+                    response_result = response.json()["results"][0]
+                    print(response_result)
+                    srcid = int(response_result["id"])
                 name = response_result["fname"]
                 city = response_result["city"]
                 state = response_result["state"]
@@ -149,8 +159,12 @@ def main():
     # fix cities missing special characters
     if (country == "Portugal") and (city == "Canecas"):
         city = "Cane\u00e7as"
+    if (country == "Spain") and (city == "Murcia"):
+        city = "M\u00farcia"
     if (country == "Spain") and (city == "La Guardia de Jan"):
         city = "La Guardia de Ja\u00e9n"
+    if (country == "Spain") and (state == "Albacete"):
+        city = "Albacete"
 
 
     openaiurl = "https://api.openai.com/v1"
@@ -192,11 +206,11 @@ def main():
         mccLang = "spanish"
     elif str(srcid)[:3] == "208":
         mccLang = "french"
-    elif str(srcid)[:3] in {"262", "232"}:
+    elif str(srcid)[:3] in {"262", "263", "264", "265", "232"}:
         mccLang = "german"
     elif str(srcid)[:3] in {"204", "206"}:
         mccLang = "dutch"
-    elif str(srcid)[:3] == "222":
+    elif str(srcid)[:3] in {"222", "223", "224"}:
         mccLang = "italian"
     elif str(srcid)[:3] == "202":
         mccLang = "greek"
@@ -206,6 +220,8 @@ def main():
         mccLang = "ukrainian"
     elif str(srcid)[:3] == "260":
         mccLang = "polish"
+    elif str(srcid)[:3] == "284":
+        mccLang = "bulgarian"
     elif str(srcid)[:3] == "286":
         mccLang = "turkish"
     elif str(srcid)[:3] in {"460", "461"}:
@@ -250,7 +266,7 @@ def main():
     #    data["language"] = "pt"
     
     ### Always force speech-to-text language for specific src ids ###
-    if srcid in {2681009, 2680237}:
+    if srcid in {2681009, 2680237, 2683226}:
         data["language"] = "pt"
     
     if "language" in data:
@@ -285,16 +301,17 @@ def main():
 
     # workaround frequent whisper mistakes
     if mccLang in {"portuguese", "spanish"}:
-        if speech_language in {"latin", "welsh", "nynorsk"}:
-            speech_language = mccLang
         if speech_language == "galician":
             if str(callsign)[:3] not in {"EA1", "EB1", "EC1"}:
                 speech_language = mccLang
     if mccLang == "dutch":
-        if speech_language in {"afrikaans", "nynorsk"}:
+        if speech_language == "afrikaans":
             speech_language = mccLang
-    if speech_language == "maori":
-        speech_language = "english"
+    if speech_language in {"maori", "latin", "welsh", "nynorsk"}:
+        if mccLang is not None:
+            speech_language = mccLang
+        else:
+            speech_language = "english"
     if (speech_to_text == "...") or speech_to_text.endswith("Amara.org"):
         speech_to_text = "";
 
@@ -323,9 +340,10 @@ def main():
     ]
 
     data = {
-        #"model": "gpt-3.5-turbo",  # Latest GPT-3.5 Turbo version
-        "model": "gpt-3.5-turbo-0613",  # Better than latest 3.5, will be deprecated on 13 Jun 2024
+        #"model": "gpt-3.5-turbo",  # Latest GPT-3.5 Turbo version, the cheapest model
+        #"model": "gpt-3.5-turbo-0613",  # Better than latest 3.5, will be deprecated on 13 Jun 2024
         #"model": "gpt-4-turbo-preview",  # Latest GPT-4 Turbo version, very expensive!
+        "model": "gpt-4o",  # New GPT-4o, faster and half price of GPT-4 Turbo
         "messages": [],
         "tools": tools
     }
@@ -346,7 +364,7 @@ def main():
             if (len(country) > 0):
                 speech_to_text += ", " + country
             speech_to_text += "?"
-        speech_to_text += " (suffix your response by asking user if you can supply any other information)"
+        speech_to_text += " (prefix your response with greeting and suffix it by asking user if you can supply any other information)"
         if (len(data["messages"]) >= 4):
             if (data["messages"][-2]["role"] == "tool") and data["messages"][-4].get("content", "").startswith(speech_to_text):
                 speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
@@ -375,7 +393,10 @@ def main():
             youAreTalkingWith += ", " + country
     youAreTalkingWith += ". "
 
-    data["messages"].insert(0,{"role": "system", "content": "You are a voice capable bot, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
+    if data["model"].startswith("gpt-3.5"):
+        data["messages"].insert(0,{"role": "system", "content": "You are a voice capable assistant, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
+    else:
+        data["messages"].insert(0,{"role": "system", "content": "You are a voice capable assistant, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Provide continuous text responses without markdown formatting such as bold or lists, suitable for voice synthesizer reading. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
     
     # ask for reply in the same language as input
     speech_to_text += " (reply in " + speech_language + ")"
@@ -429,6 +450,10 @@ def main():
     data["messages"].append({"role": "assistant", "content": chatgpt_response})
     with open("conversation.json", "w") as write_file:
         json.dump(data["messages"], write_file, indent = 2)
+
+    # remove markdown formatting
+    #chatgpt_response = re.sub("(?m)^### ", "", chatgpt_response)
+    #chatgpt_response = re.sub("\\*\\*(.*?)\\*\\*", "\\1", chatgpt_response)
 
 
     ########## Text-to-Speech ##########
