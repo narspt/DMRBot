@@ -34,6 +34,8 @@ def get_current_weather(location, units="metric", forecast=False):
             "Accept-Language": "en-US,en;q=0.5"
         }
         response = requests.get(url, params=params, headers=headers, timeout=60)
+        #with open('weather.dbg', 'w') as write_file:
+        #    write_file.write(response.text)
 
         data = dict()
         data["temp"] = float(re.search("(?:<span.*?id=\"wob_tm\".*?>)(.*?)(?:</span>)", response.text).group(1))
@@ -239,8 +241,6 @@ def main():
         data["prompt"] += ";country:" + country
     if mccLang is not None:
         data["prompt"] += ";language:" + mccLang
-    if str(srcid)[:4] == "2685":  #workaround
-        data["prompt"] += ";city:Loul\u00e9"
     data["prompt"] = "[" + data["prompt"] + "]"
     #print("prompt=" + data["prompt"])
     
@@ -304,6 +304,7 @@ def main():
         if speech_language == "galician":
             if str(callsign)[:3] not in {"EA1", "EB1", "EC1"}:
                 speech_language = mccLang
+        speech_to_text = speech_to_text.replace("Calas de Mallorca", "Cales de Mallorca")
     if mccLang == "dutch":
         if speech_language == "afrikaans":
             speech_language = mccLang
@@ -312,7 +313,8 @@ def main():
             speech_language = mccLang
         else:
             speech_language = "english"
-    if (speech_to_text == "...") or speech_to_text.endswith("Amara.org"):
+    if (speech_to_text == "...") or speech_to_text.endswith("Amara.org") or ("cctexas.com" in speech_to_text) or \
+       speech_to_text.startswith("http://") or speech_to_text.startswith("https://") or speech_to_text.startswith("www."):
         speech_to_text = "";
 
 
@@ -330,7 +332,8 @@ def main():
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."},
+                       #"location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."},
+                        "location": {"type": "string", "description": "The city, state (optional) and country, e.g. San Francisco, California, USA."},
                         "forecast": {"type": "boolean", "description": "Include forecast for next days."}
                     },
                     "required": ["location", "forecast"]
@@ -367,7 +370,7 @@ def main():
         speech_to_text += " (prefix your response with greeting and suffix it by asking user if you can supply any other information)"
         if (len(data["messages"]) >= 4):
             if (data["messages"][-2]["role"] == "tool") and data["messages"][-4].get("content", "").startswith(speech_to_text):
-                speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid to transmit very short sentences like just one or two words because I may have trouble to understand them. How can I help you?"
+                speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid transmitting very short sentences like just one or two words because I may have trouble understanding them. How can I help you?"
         if mccLang is not None:
             speech_language = mccLang
         else:
@@ -380,23 +383,25 @@ def main():
             data["messages"].remove(msg)
     data["messages"] = data["messages"][-8:]
 
-    youAreTalkingWith = "You (assistant) know that you are talking with a ham radio operator"
+    sm = "You are a voice-capable assistant, users talk to you using radios, input is processed by speech recognition and output by voice synthesizer. "
+    if not data["model"].startswith("gpt-3.5"):
+        sm += "Provide continuous text responses without markdown formatting such as bold or lists, suitable for voice synthesizer reading. "
+    sm += "Users may say their callsign at the start or end of their communications, ignore that. "
+    sm += "You know that you are talking to a ham radio operator"
     if len(name) > 0:
-        youAreTalkingWith += ", his name is " + name
+        sm += ", user's name is " + name
     if len(callsign) > 0:
-        youAreTalkingWith += ", his callsign is " + callsign
+        sm += ", user's callsign is " + callsign
     if len(city) > 0:
-        youAreTalkingWith += ", he is located at " + city
+        sm += ", user is located in " + city
         if (str(srcid)[:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
-            youAreTalkingWith += ", " + state
+            sm += ", " + state
         if (len(country) > 0):
-            youAreTalkingWith += ", " + country
-    youAreTalkingWith += ". "
-
-    if data["model"].startswith("gpt-3.5"):
-        data["messages"].insert(0,{"role": "system", "content": "You are a voice capable assistant, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
-    else:
-        data["messages"].insert(0,{"role": "system", "content": "You are a voice capable assistant, users talk with you using radios, input is processed by speech recognition and output by voice synthetizer. Provide continuous text responses without markdown formatting such as bold or lists, suitable for voice synthesizer reading. Users may say their callsign on start or end of their communications, ignore that. " + youAreTalkingWith + "If asked for information about a location, answer in detail but don't include current weather information unless user explicitly asks for that. Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime()) })
+            sm += ", " + country
+    sm += ". "
+    sm += "If asked for information about a location, answer in detail but don't include current weather information unless the user explicitly asks for it. "
+    sm += "Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime())
+    data["messages"].insert(0,{"role": "system", "content": sm})
     
     # ask for reply in the same language as input
     speech_to_text += " (reply in " + speech_language + ")"
