@@ -1,5 +1,5 @@
-# DMRBot - ChatGPT Voice Bot for DMR
-This software connects to a DMR "master" (using MMDVM protocol) and provides a ChatGPT voice-capable AI bot that can answer questions and provide information. The software consists of a main program (which is essentially a DMR client responsible for connecting to the master and decoding/encoding audio using an AMBEServer) and a Python helper script to process the received audio using remote APIs.
+# DMRBot - ChatGPT Voice Bot for DMR / D-Star
+This software connects to a DMR "master" (using MMDVM protocol) and provides a ChatGPT voice-capable AI bot that can answer questions and provide information. The software consists of a main program (which is essentially a DMR / D-Star client responsible for connecting to the master and decoding/encoding audio using an AMBEServer) and a Python helper script to process the received audio using remote APIs.
 
 OpenAI Whisper API is used for speech recognition and Google Translate's text-to-speech API for speech synthesis. Speech recognition supports multiple languages and the bot is ready to answer in the same language the user speaks. Speech recognition tends to perform better in English, for other languages it may sometimes be problematic with very short sentences, such as those with only one or two words. When interacting with the bot, it is always better to speak clearly and formalize normal/polite questions, as you would when speaking to another person, the more words you say the better the speech recognition will function.
 
@@ -25,14 +25,22 @@ Main program is a single C file, no makefile is required. To build, simply run g
 ```
 gcc -o dmrbot dmrbot.c
 ```
+or to build the D-Star version:
+```
+gcc -o xrfbot xrfbot.c
+```
 
 # Usage
 ```
 ./dmrbot [CALLSIGN] [DMRID] [DMRHostIP:PORT:TG:PW] [AMBEServerIP:PORT]
 ```
+or for the D-Star version:
+```
+./xrfbot [CALLSIGN] [XRFName:MOD:XRFHostIP:PORT] [AMBEServerIP:PORT]
+```
 
 # Additional Notes
-If you do not have an AMBEServer available, you may use md380-emu for testing purposes, available at this repository: https://github.com/narspt/md380tools
+If you do not have an AMBEServer available, you may use md380-emu for testing purposes (not usable for the D-Star version), available at this repository: https://github.com/narspt/md380tools
 
 You need to run md380-emu on an ARM cpu system like Raspberry Pi (or use qemu-user on x86_64), to compile it you should just need to "cd emulator" and run "make", then you can get the "md380-emu" standalone binary and run it (with "-s port" parameter) to create an emulated AMBEServer.
 
