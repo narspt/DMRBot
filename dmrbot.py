@@ -344,7 +344,6 @@ def main():
 
     data = {
         #"model": "gpt-3.5-turbo",  # Latest GPT-3.5 Turbo version, the cheapest model
-        #"model": "gpt-3.5-turbo-0613",  # Better than latest 3.5, will be deprecated on 13 Jun 2024
         #"model": "gpt-4-turbo-preview",  # Latest GPT-4 Turbo version, very expensive!
         "model": "gpt-4o",  # New GPT-4o, faster and half price of GPT-4 Turbo
         "messages": [],
@@ -369,7 +368,7 @@ def main():
             speech_to_text += "?"
         speech_to_text += " (prefix your response with greeting and suffix it by asking user if you can supply any other information)"
         if (len(data["messages"]) >= 4):
-            if (data["messages"][-2]["role"] == "tool") and data["messages"][-4].get("content", "").startswith(speech_to_text):
+            if (data["messages"][-2]["role"] == "tool") and str(data["messages"][-4].get("content", "") or "").startswith(speech_to_text):
                 speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid transmitting very short sentences like just one or two words because I may have trouble understanding them. How can I help you?"
         if mccLang is not None:
             speech_language = mccLang
@@ -449,16 +448,17 @@ def main():
         post_to_chatgpt_api()
     
     chatgpt_response = response.json()["choices"][0]["message"]["content"]
+
+    # remove markdown formatting
+    chatgpt_response = re.sub("(?m)^### ", "", chatgpt_response)
+    chatgpt_response = re.sub("\\*\\*(.*?)\\*\\*", "\\1", chatgpt_response)
+
     print("Response from ChatGPT:", chatgpt_response)
     print("Total Tokens:", response.json()["usage"]["total_tokens"])
     
     data["messages"].append({"role": "assistant", "content": chatgpt_response})
     with open("conversation.json", "w") as write_file:
         json.dump(data["messages"], write_file, indent = 2)
-
-    # remove markdown formatting
-    #chatgpt_response = re.sub("(?m)^### ", "", chatgpt_response)
-    #chatgpt_response = re.sub("\\*\\*(.*?)\\*\\*", "\\1", chatgpt_response)
 
 
     ########## Text-to-Speech ##########
