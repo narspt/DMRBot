@@ -41,6 +41,7 @@
 
 #define AMBE_ENCODE_GAIN -15
 #define AMBE_DECODE_GAIN 10
+//#define FREEDMR_COMPAT
 #define BUFSIZE 2048
 #define TIMEOUT 60
 //#define DEBUG
@@ -895,6 +896,19 @@ int process_connect(int connect_status, char *buf)
 		fprintf(stderr, "Sending conf to DMR...\n");
 		break;
 	case DMR_CONF:
+#ifdef FREEDMR_COMPAT
+		connect_status = DMR_OPTS;
+		memcpy(out, "RPTO", 4);
+		out[4] = (dmrid >> 24) & 0xff;
+		out[5] = (dmrid >> 16) & 0xff;
+		out[6] = (dmrid >> 8) & 0xff;
+		out[7] = (dmrid >> 0) & 0xff;
+		sprintf(&out[8], "TS2=%u;DIAL=0;VOICE=0;LANG=en_GB;SINGLE=0;TIMER=10;", host1_tg);
+		len = 8 + strlen(&out[8]);
+		fprintf(stderr, "Sending opts to DMR...\n");
+		break;
+	case DMR_OPTS:
+#endif
 		connect_status = CONNECTED_RW;
 		memcpy(buf, "DMRD", 4);
 		buf[4] = 0x00;
