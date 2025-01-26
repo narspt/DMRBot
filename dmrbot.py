@@ -27,85 +27,34 @@ from gtts import gTTS
 def get_current_weather(location, units="metric", forecast=False):
 
     try:
-        url = "https://www.google.com/search"
-        params = { "hl": "en", "lr": "lang_en", "ie": "UTF-8", "q": "weather " + location }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
-            "Accept-Language": "en-US,en;q=0.5"
-        }
-        response = requests.get(url, params=params, headers=headers, timeout=60)
-        #with open('weather.dbg', 'w') as write_file:
-        #    write_file.write(response.text)
+        with open("openweathermap_api_key.txt", "r") as file:
+            openweathermap_api_key = file.read().strip()
+    except:
+        print("failed to read file openweathermap_api_key.txt")
+        return json.dumps({"error": "Could not fetch weather for " + location})
 
-        data = dict()
-        data["temp"] = float(re.search("(?:<span.*?id=\"wob_tm\".*?>)(.*?)(?:</span>)", response.text).group(1))
-        data["weather"] = re.search("(?:<span.*?id=\"wob_dc\".*?>)(.*?)(?:</span>)", response.text).group(1)
-        data["precip_prob"] = int(re.search("(?:<span.*?id=\"wob_pp\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
-        data["humidity"] = int(re.search("(?:<span.*?id=\"wob_hm\".*?>)(.*?)(?:</span>)", response.text).group(1).replace("%", ""))
-        data["wind"] = re.search("(?:<span.*?id=\"wob_ws\".*?>)(.*?)(?:</span>)", response.text).group(1)
+    url = "https://api.openweathermap.org/data/2.5/weather?q=" + location + "&appid=" + openweathermap_api_key + "&units=" + units
+    response = requests.get(url, timeout=60)
+    if response.status_code == 200:
+        data = response.json()
+        #print(json.dumps(data, indent=2))
 
-        match = re.search("(?:\\\\x3cimg.*?id\\\\x3d\\\\x22wind_image_\\d\\\\x22 style\\\\x3d\\\\x22.*?transform:rotate\\()(\\d+)(?:deg\\))", response.text)
-        if match:
-            data["wind_dir"] = int(match.group(1)) - 90
-            compass_direction = ["N","NE","E","SE","S","SW","W","NW"]
-            data["wind_dir"] = compass_direction[int((data["wind_dir"]/45)+0.5) % 8]
-        else:
-            data["wind_dir"] = ""
-
-        match = re.search("(?:<span class=\"BBwThe\">)(.*?)(?:</span>)", response.text)
-        if match:
-            data["location"] = match.group(1)
-        else:
-            data["location"] = location
-
-        forecast_data = []
-        if forecast:
-            for i in range(4):
-                match = re.search("(?:<div class=\"wob_df.*?\" data-wob-di=\"" + str(i) + "\".*?<div class=\"Z1VzSb\" aria-label=\")(.*?)(?:\">.*?alt=\")(.*?)(?:\"></g-img>.*?<span class=\"wob_t\" style=\"display:inline\">)(.*?)(?:</span>.*?<span class=\"wob_t\" style=\"display:inline\">)(.*?)(?:</span>)", response.text)
-                if match:
-                    forecast_data.append({"day": match.group(1), "weather_conditions": match.group(2), "max_temperature": int(match.group(3)), "min_temperature": int(match.group(4))})
-
-        if ("km/h" in data["wind"]) or ("m/s" in data["wind"]):
-            if "m/s" in data["wind"]:
-                data["wind"] = float(data["wind"].replace("m/s", "")) * 3.6
-            else:
-                data["wind"] = float(data["wind"].replace("km/h", ""))
-            if units == "imperial":
-                data["wind"] = round(data["wind"] / 1.6, 1)
-                data["temp"] = round(data["temp"] * (9 / 5) + 32, 1)
-                for i in range(len(forecast_data)):
-                    forecast_data[i]["max_temperature"] = round(forecast_data[i]["max_temperature"] * (9 / 5) + 32)
-                    forecast_data[i]["min_temperature"] = round(forecast_data[i]["min_temperature"] * (9 / 5) + 32)
-        elif "mph" in data["wind"]:
-            data["wind"] = float(data["wind"].replace("mph", ""))
-            if units == "metric":
-                data["wind"] = round(data["wind"] * 1.6, 1)
-                data["temp"] = round((data["temp"] - 32) * (5 / 9), 1)
-                for i in range(len(forecast_data)):
-                    forecast_data[i]["max_temperature"] = round((forecast_data[i]["max_temperature"] - 32) * (5 / 9))
-                    forecast_data[i]["min_temperature"] = round((forecast_data[i]["min_temperature"] - 32) * (5 / 9))
-        else:
-            data["wind"] = 0
-
-        data["weather"] = data["weather"].replace("Clear", "Clear sky")
-        for i in range(len(forecast_data)):
-            forecast_data[i]["weather_conditions"] = forecast_data[i]["weather_conditions"].replace("Clear", "Clear sky")
+        data['wind']['dir'] = round(data['wind']['deg'])
+        compass_direction = ["N","NE","E","SE","S","SW","W","NW"]
+        data['wind']['dir'] = compass_direction[int((data['wind']['dir']/45)+0.5) % 8]
 
         weather_info = {
-            "location": data["location"],
-            "temperature": round(data["temp"]),
+            "location": data['name'] + ", " + data['sys']['country'],
+            "temperature": round(data['main']['temp']),
             "temperature_unit": "fahrenheit" if units == "imperial" else "celsius",
-            "humidity": data["humidity"],
-            "weather_conditions": data["weather"],
-            "precipitation_probability": data["precip_prob"],
-            "wind_speed": round(data["wind"]),
+            "humidity": round(data['main']['humidity']),
+            "weather_conditions": data['weather'][0]['description'],
+            "wind_speed": round(data['wind']['speed']),
             "wind_speed_unit": "miles per hour" if units == "imperial" else "kilometres per hour",
-            "wind_direction": data["wind_dir"]
+            "wind_direction": data['wind']['dir']
         }
-        if forecast:
-            weather_info["forecast"] = forecast_data
         return json.dumps(weather_info)
-    except:
+    else:
         return json.dumps({"error": "Could not fetch weather for " + location})
 
 
@@ -333,7 +282,8 @@ def main():
                     "type": "object",
                     "properties": {
                        #"location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."},
-                        "location": {"type": "string", "description": "The city, state (optional) and country, e.g. San Francisco, California, USA."},
+                       #"location": {"type": "string", "description": "The city, state (optional) and country, e.g. San Francisco, California, USA."},
+                        "location": {"type": "string", "description": "The city, state code (optional) and country code, codes must be two-letter ISO3166, e.g. San Francisco, CA, US."},
                         "forecast": {"type": "boolean", "description": "Include forecast for next days."}
                     },
                     "required": ["location", "forecast"]

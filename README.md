@@ -13,6 +13,10 @@ You can test the bot live at BrandMeister TG 268940 or TG 214990, as well as on 
 3. Click "Create new secret key" to generate a new API key.
 4. Create a file named "openai_api_key.txt" with your API key on the DMRBot directory.
 
+# OpenWeatherMap API key
+If you want the bot to be able to provide real-time weather information, you need to Sign up for a free OpenWeatherMap account at https://home.openweathermap.org/users/sign_up
+Create a file named "openweathermap_api_key.txt" with your API key on the DMRBot directory.
+
 # Requirements
 Python 3.6+ is required to run the dmrbot.py helper script, also gTTS python package must be installed:
 ```
