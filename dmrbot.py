@@ -24,7 +24,7 @@ import json
 import time
 from gtts import gTTS
 
-def get_current_weather(location, units="metric", forecast=False):
+def get_current_weather(location, latitude, longitude, units="metric", forecast=False):
 
     try:
         with open("openweathermap_api_key.txt", "r") as file:
@@ -33,11 +33,27 @@ def get_current_weather(location, units="metric", forecast=False):
         print("failed to read file openweathermap_api_key.txt")
         return json.dumps({"error": "Could not fetch weather for " + location})
 
-    url = "https://api.openweathermap.org/data/2.5/weather?q=" + location + "&appid=" + openweathermap_api_key + "&units=" + units
+    if re.search(",\\s[A-Z]{2}$", location):
+        url = "https://api.openweathermap.org/geo/1.0/direct?q=" + location + "&limit=1&appid=" + openweathermap_api_key
+        response = requests.get(url, timeout=60)
+        if response.status_code == 200:
+            data = response.json()
+            if len(data) > 0:
+                latitude = str(data[0]['lat'])
+                longitude = str(data[0]['lon'])
+                print("latitude=" + latitude + ", longitude=" + longitude)
+
+    url = "https://api.openweathermap.org/data/2.5/weather?lat=" + latitude + "&lon=" + longitude + "&appid=" + openweathermap_api_key + "&units=" + units
     response = requests.get(url, timeout=60)
     if response.status_code == 200:
         data = response.json()
         #print(json.dumps(data, indent=2))
+
+        # convert m/s to km/h
+        if units == "metric":
+            data['wind']['speed'] *= 3.6
+            if "gust" in data['wind']:
+                data['wind']['gust'] *= 3.6
 
         data['wind']['dir'] = round(data['wind']['deg'])
         compass_direction = ["N","NE","E","SE","S","SW","W","NW"]
@@ -50,9 +66,25 @@ def get_current_weather(location, units="metric", forecast=False):
             "humidity": round(data['main']['humidity']),
             "weather_conditions": data['weather'][0]['description'],
             "wind_speed": round(data['wind']['speed']),
+            "wind_gust": round(data['wind']['gust']) if "gust" in data['wind'] else None,
             "wind_speed_unit": "miles per hour" if units == "imperial" else "kilometres per hour",
-            "wind_direction": data['wind']['dir']
+            "wind_direction": data['wind']['dir'],
+            "pressure": round(data['main']['pressure']),
+            "pressure_unit": "milibars"
         }
+
+        if forecast:
+            url = "https://api.openweathermap.org/data/2.5/forecast?lat=" + latitude + "&lon=" + longitude + "&cnt=32&appid=" + openweathermap_api_key + "&units=" + units
+            response = requests.get(url, timeout=60)
+            if response.status_code == 200:
+                data = response.json()
+                #print(json.dumps(data, indent=2))
+                forecast_data = []
+                for item in data['list']:
+                    forecast_data.append({'time': time.strftime("%Y-%m-%d %H:%M", time.gmtime(item['dt']+data['city']['timezone'])), 'weather': item['weather'][0]['description'], 'temp': round(item['main']['temp'])})
+                #print(json.dumps(forecast_data, indent=2))
+                weather_info["forecast"] = forecast_data
+
         return json.dumps(weather_info)
     else:
         return json.dumps({"error": "Could not fetch weather for " + location})
@@ -253,7 +285,6 @@ def main():
         if speech_language == "galician":
             if str(callsign)[:3] not in {"EA1", "EB1", "EC1"}:
                 speech_language = mccLang
-        speech_to_text = speech_to_text.replace("Calas de Mallorca", "Cales de Mallorca")
     if mccLang == "dutch":
         if speech_language == "afrikaans":
             speech_language = mccLang
@@ -284,18 +315,20 @@ def main():
                        #"location": {"type": "string", "description": "The city and state, e.g. San Francisco, California."},
                        #"location": {"type": "string", "description": "The city, state (optional) and country, e.g. San Francisco, California, USA."},
                         "location": {"type": "string", "description": "The city, state code (optional) and country code, codes must be two-letter ISO3166, e.g. San Francisco, CA, US."},
+                        "latitude": {"type": "string", "description": "Latitude of the location, e.g. 37.7792588"},
+                        "longitude": {"type": "string", "description": "Longitude of the location, e.g. -122.4193286"},
                         "forecast": {"type": "boolean", "description": "Include forecast for next days."}
                     },
-                    "required": ["location", "forecast"]
+                    "required": ["location", "latitude", "longitude", "forecast"]
                 }
             }
         }
     ]
 
     data = {
-        #"model": "gpt-3.5-turbo",  # Latest GPT-3.5 Turbo version, the cheapest model
-        #"model": "gpt-4-turbo-preview",  # Latest GPT-4 Turbo version, very expensive!
-        "model": "gpt-4o",  # New GPT-4o, faster and half price of GPT-4 Turbo
+        #"model": "gpt-3.5-turbo",
+        #"model": "gpt-4o-mini",
+        "model": "gpt-4o",
         "messages": [],
         "tools": tools
     }
@@ -311,7 +344,7 @@ def main():
             speech_to_text += ", I'm " + name
         if len(city) > 0:
             speech_to_text += ", How is the current weather in " + city
-            if (str(srcid)[:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+            if (str(srcid)[:3] in {"310","311","312","313","314","315","316","317","318","319","320", "724"}) and (len(state) > 0):
                 speech_to_text += ", " + state
             if (len(country) > 0):
                 speech_to_text += ", " + country
@@ -343,7 +376,7 @@ def main():
         sm += ", user's callsign is " + callsign
     if len(city) > 0:
         sm += ", user is located in " + city
-        if (str(srcid)[:3] in {"310","311","312","313","314","315","316","317", "724"}) and (len(state) > 0):
+        if (str(srcid)[:3] in {"310","311","312","313","314","315","316","317","318","319","320", "724"}) and (len(state) > 0):
             sm += ", " + state
         if (len(country) > 0):
             sm += ", " + country
@@ -390,8 +423,8 @@ def main():
                     function_args = {}
                 print("function: " + function_name + ", arguments: " + json.dumps(function_args))
                 if function_name == "get_current_weather":
-                    units = "imperial" if str(srcid)[:3] in {"310","311","312","313","314","315","316","317"} else "metric"
-                    tool_response = get_current_weather(function_args.get("location", ""), units, function_args.get("forecast", False))
+                    units = "imperial" if str(srcid)[:3] in {"310","311","312","313","314","315","316","317","318","319","320"} else "metric"
+                    tool_response = get_current_weather(function_args.get("location", ""), function_args.get("latitude", ""), function_args.get("longitude", ""), units, function_args.get("forecast", False))
             print(tool_response)
             data["messages"].append({"role": "tool", "tool_call_id": tool_call["id"], "content": tool_response})
         del data["tools"]

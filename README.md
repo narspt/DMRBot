@@ -5,7 +5,7 @@ OpenAI Whisper API is used for speech recognition and Google Translate's text-to
 
 An additional feature is that if the user transmits for (at least) 1 second without speaking, the bot will default to replying with the current weather information for the user's location. The bot can also provide weather forecast for the next 3 days upon request.
 
-You can test the bot live at BrandMeister TG 268940 or TG 214990, as well as on FreeDMR TG 21490.
+You can test the bot live at BrandMeister TG 268940, TG 214990 or TG 262691, as well as on FreeDMR TG 21490. Native D-Star version of the bot can also be tested at XLX140Y or XLX880J.
 
 # How to get your own OpenAI API keys
 1. Log in (or Sign up) to the OpenAI Platform website at https://platform.openai.com/
@@ -14,8 +14,7 @@ You can test the bot live at BrandMeister TG 268940 or TG 214990, as well as on 
 4. Create a file named "openai_api_key.txt" with your API key on the DMRBot directory.
 
 # OpenWeatherMap API key
-If you want the bot to be able to provide real-time weather information, you need to Sign up for a free OpenWeatherMap account at https://home.openweathermap.org/users/sign_up
-Create a file named "openweathermap_api_key.txt" with your API key on the DMRBot directory.
+If you want the bot to be able to provide real-time weather information, you need to Sign up for a free OpenWeatherMap account at https://home.openweathermap.org/users/sign_up , then create a file named "openweathermap_api_key.txt" with your OpenWeatherMap API key on the DMRBot directory.
 
 # Requirements
 Python 3.6+ is required to run the dmrbot.py helper script, also gTTS python package must be installed:
