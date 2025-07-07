@@ -383,6 +383,7 @@ def main():
     sm += ". "
     sm += "If asked for information about a location, answer in detail but don't include current weather information unless the user explicitly asks for it. "
     sm += "Current UTC date/time: " + time.strftime("%Y-%m-%d %H:%M",time.gmtime())
+    sm += " Please keep your responses concise and within approximately 3 minutes of audio when converted to speech."
     data["messages"].insert(0,{"role": "system", "content": sm})
     
     # ask for reply in the same language as input
