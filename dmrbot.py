@@ -116,19 +116,21 @@ def main():
                 print("retrying...")
             try:
                 if (srcid > 0):
-                    response = requests.get("https://radioid.net/api/dmr/user/?id=" + str(srcid), timeout=20)
-                    response_result = response.json()["results"][0]
+                    response = requests.get("https://radioid.net/api/users?id=" + str(srcid), timeout=20)
+                else:
+                    response = requests.get("https://radioid.net/api/users?callsign=" + callsign, timeout=20)
+                response_results = response.json()["results"]
+                if (len(response_results) > 0):
+                    response_result = response_results[0]
                     print(response_result)
-                    callsign = response_result["callsign"]
-                elif (len(callsign) > 0):
-                    response = requests.get("https://radioid.net/api/dmr/user/?callsign=" + callsign, timeout=20)
-                    response_result = response.json()["results"][0]
-                    print(response_result)
-                    srcid = int(response_result["id"])
-                name = response_result["fname"]
-                city = response_result["city"]
-                state = response_result["state"]
-                country = response_result["country"]
+                    if (srcid > 0):
+                        callsign = response_result["callsign"]
+                    else:
+                        srcid = int(response_result["radio_id"])
+                    name = str(response_result.get("name") or "")
+                    city = str(response_result.get("city") or "")
+                    state = str(response_result.get("state") or "")
+                    country = str(response_result.get("country") or "")
                 break
             except requests.exceptions.Timeout:
                 print("connection timeout")
@@ -351,7 +353,7 @@ def main():
             speech_to_text += "?"
         speech_to_text += " (prefix your response with greeting and suffix it by asking user if you can supply any other information)"
         if (len(data["messages"]) >= 4):
-            if (data["messages"][-2]["role"] == "tool") and str(data["messages"][-4].get("content", "") or "").startswith(speech_to_text):
+            if (data["messages"][-2]["role"] == "tool") and str(data["messages"][-4].get("content") or "").startswith(speech_to_text):
                 speech_to_text = "answer this text with some variations (talking to the user in a formal way): Hello " + name + ", I am an artificial intelligence assistant, I am here to assist you by providing information and answering your questions. Please speak your questions in clear speech, slowly and formalize them as full questions, just as you would when speaking with another person, avoid transmitting very short sentences like just one or two words because I may have trouble understanding them. How can I help you?"
         if mccLang is not None:
             speech_language = mccLang
@@ -539,6 +541,8 @@ def main():
     chatgpt_response = chatgpt_response.replace("\u00b0C.", "\u00b0C .")
     if tts_lang == "pt":
         chatgpt_response = chatgpt_response.replace("km/h", "quil\u00f4metros por hora")
+        if tts_tld == "pt":
+            chatgpt_response = chatgpt_response.replace("quil\u00f4metros", "quil\u00f3metros")
     
     print("lang=" + tts_lang + ", tld=" + tts_tld)
     tts = gTTS(chatgpt_response, lang=tts_lang, tld=tts_tld, slow=False, lang_check=False)

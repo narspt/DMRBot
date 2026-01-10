@@ -5,7 +5,7 @@ OpenAI Whisper API is used for speech recognition and Google Translate's text-to
 
 An additional feature is that if the user transmits for (at least) 1 second without speaking, the bot will default to replying with the current weather information for the user's location. The bot can also provide weather forecast for the next 3 days upon request.
 
-You can test the bot live at BrandMeister TG 268940, TG 214990 or TG 262691, as well as on FreeDMR TG 21490. Native D-Star version of the bot can also be tested at XLX140Y or XLX880J.
+You can test the bot live at BrandMeister TG 268940, TG 214990 or TG 262691, as well as on FreeDMR TG 21490. Native D-Star version of the bot can also be tested at XLX140Y.
 
 # How to get your own OpenAI API keys
 1. Log in (or Sign up) to the OpenAI Platform website at https://platform.openai.com/
